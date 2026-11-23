@@ -81,14 +81,18 @@ export function AuthPanel() {
   if (!client) return <p role="alert">{error}</p>;
 
   return (
-    <section className="auth-panel" aria-labelledby="auth-title">
+    <section className={session ? "auth-panel" : "auth-panel login-panel"} aria-labelledby="auth-title">
       {session ? (
         <>
-          <h2 id="auth-title">Sesión iniciada</h2>
-          <p>{session.user.email}</p>
-          <button type="button" disabled={busy} onClick={signOut}>
-            {busy ? "Cerrando sesión…" : "Cerrar sesión"}
-          </button>
+          <div className="session-bar">
+            <div>
+              <h2 id="auth-title">Sesión iniciada</h2>
+              <p>{session.user.email}</p>
+            </div>
+            <button className="secondary-button" type="button" disabled={busy} onClick={signOut}>
+              {busy ? "Cerrando sesión…" : "Cerrar sesión"}
+            </button>
+          </div>
           <MatchPanel key={session.user.id} client={client} userId={session.user.id} />
         </>
       ) : (

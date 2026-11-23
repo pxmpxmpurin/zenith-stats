@@ -20,34 +20,36 @@ const matchColumns = "id, deck_id, opponent_legend, opponent_deck_type, won_die_
 const deckColumns = "id, legend, deck_type";
 const unspecifiedDeckType = "Sin especificar";
 
-function normalizeLegend(legend: string) {
-  return legend.trim().toLowerCase();
+function normalizeName(name: string) {
+  return name.trim().toLowerCase();
 }
 
 function formatLegend(legend: string) {
-  return normalizeLegend(legend).replace(/^./u, (firstLetter) => firstLetter.toUpperCase());
+  return normalizeName(legend).replace(/^./u, (firstLetter) => firstLetter.toUpperCase());
+}
+
+function visibleDeckType(deck?: Deck) {
+  if (!deck || normalizeName(deck.deck_type) === normalizeName(unspecifiedDeckType)) return "";
+  return deck.deck_type;
 }
 
 export function MatchPanel({ client, userId }: { client: SupabaseClient; userId: string }) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [legendQuery, setLegendQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const legendInput = useRef<HTMLInputElement>(null);
+  const editDialog = useRef<HTMLDialogElement>(null);
+  const editHeading = useRef<HTMLHeadingElement>(null);
   const pendingMatch = useRef<{ id: string; fields: string } | null>(null);
   const saveInProgress = useRef(false);
   const knownLegends = [...new Map(
-    decks.map((deck) => [normalizeLegend(deck.legend), formatLegend(deck.legend)]),
+    decks.map((deck) => [normalizeName(deck.legend), formatLegend(deck.legend)]),
   ).values()];
-  const search = normalizeLegend(legendQuery);
-  const suggestions = knownLegends
-    .filter((legend) => normalizeLegend(legend).includes(search))
-    .slice(0, 3);
+  const editingDeck = decks.find((deck) => deck.id === editingMatch?.deck_id);
 
   useEffect(() => {
     const request = new AbortController();
@@ -76,7 +78,23 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
     return () => request.abort();
   }, [client, userId]);
 
-  async function saveMatch(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const dialog = editDialog.current;
+    if (editingMatch && dialog && !dialog.open) {
+      dialog.showModal();
+      editHeading.current?.focus();
+    } else if (!editingMatch && dialog?.open) {
+      dialog.close();
+    }
+  }, [editingMatch]);
+
+  function editMatch(match: Match | null) {
+    setEditingMatch(match);
+    setError("");
+    setNotice("");
+  }
+
+  async function saveMatch(event: FormEvent<HTMLFormElement>, editingMatch: Match | null) {
     event.preventDefault();
     if (saveInProgress.current) return;
 
@@ -84,7 +102,9 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
     const fields = new FormData(form);
     const opponentLegend = formatLegend(String(fields.get("opponentLegend") ?? ""));
     const opponentDeckType = String(fields.get("opponentDeckType") ?? "").trim();
-    const legend = formatLegend(legendQuery);
+    const legend = formatLegend(String(fields.get("legend") ?? ""));
+    const search = normalizeName(legend);
+    const deckType = String(fields.get("deckType") ?? "").trim() || unspecifiedDeckType;
     const dieRoll = fields.get("dieRoll");
     const result = fields.get("result");
 
@@ -101,21 +121,21 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
     setSaving(true);
 
     try {
-      const matchesLegend = (deck: Deck) => (
-        normalizeLegend(deck.legend) === search &&
-        deck.deck_type.trim().toLowerCase() === unspecifiedDeckType.toLowerCase()
+      const matchesDeck = (deck: Deck) => (
+        normalizeName(deck.legend) === search &&
+        normalizeName(deck.deck_type) === normalizeName(deckType)
       );
-      let selectedDeck = decks.find(matchesLegend);
+      let selectedDeck = decks.find(matchesDeck);
       if (!selectedDeck) {
         const { data: savedDeck, error: deckError } = await client.from("decks")
-          .insert({ user_id: userId, legend, deck_type: unspecifiedDeckType })
+          .insert({ user_id: userId, legend, deck_type: deckType })
           .select(deckColumns).single();
         if (deckError?.code === "23505") {
           const { data: currentDecks, error: refreshError } = await client.from("decks")
             .select(deckColumns).eq("user_id", userId).order("legend").order("deck_type");
           if (refreshError) throw refreshError;
           setDecks(currentDecks);
-          selectedDeck = currentDecks.find(matchesLegend);
+          selectedDeck = currentDecks.find(matchesDeck);
         } else if (deckError) {
           throw deckError;
         } else {
@@ -126,20 +146,31 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
       if (!selectedDeck) throw new Error("No se pudo recuperar la leyenda.");
 
       const match = {
-        user_id: userId,
         deck_id: selectedDeck.id,
         opponent_legend: opponentLegend,
         opponent_deck_type: opponentDeckType || null,
         won_die_roll: dieRoll === "won",
         won_match: result === "won",
       };
+
+      if (editingMatch) {
+        const { data: updatedMatch, error: updateError } = await client.from("matches")
+          .update(match).eq("user_id", userId).eq("id", editingMatch.id)
+          .select(matchColumns).single();
+        if (updateError) throw updateError;
+        setMatches((current) => current.map((item) => item.id === updatedMatch.id ? updatedMatch : item));
+        editMatch(null);
+        setNotice("Cambios guardados.");
+        return;
+      }
+
       const signature = JSON.stringify(match);
       if (pendingMatch.current?.fields !== signature) {
         pendingMatch.current = { id: crypto.randomUUID(), fields: signature };
       }
       const id = pendingMatch.current.id;
       const { data: insertedMatch, error: matchError } = await client.from("matches")
-        .insert({ id, ...match }).select(matchColumns).single();
+        .insert({ id, user_id: userId, ...match }).select(matchColumns).single();
 
       let savedMatch = insertedMatch;
       if (matchError?.code === "23505") {
@@ -155,8 +186,6 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
       pendingMatch.current = null;
       setMatches((current) => [savedMatch, ...current].slice(0, recentLimit));
       form.reset();
-      setLegendQuery(legend);
-      setShowSuggestions(false);
       setNotice("Partida guardada.");
     } catch {
       setError("No se pudo guardar la partida. Inténtalo de nuevo.");
@@ -171,8 +200,103 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
 
   return (
     <div className="match-panel">
-      <h2>Registrar partida</h2>
-      <form onSubmit={saveMatch}>
+      <section className="panel match-entry" aria-labelledby="match-entry-title">
+        <h2 id="match-entry-title">Registrar partida</h2>
+        <MatchForm knownLegends={knownLegends} saving={saving} error={editingMatch ? "" : error}
+          onSave={(event) => void saveMatch(event, null)} />
+        <p role="status" hidden={notice !== "Partida guardada."}>{notice}</p>
+      </section>
+
+      <section className="panel match-history" aria-labelledby="match-history-title">
+        <h2 id="match-history-title">Mis partidas recientes</h2>
+        {matches.length === 0 ? <p>Aún no has registrado partidas.</p> : (
+          <ul className="match-list">
+            {matches.map((match) => {
+              const deck = decks.find((item) => item.id === match.deck_id);
+              const deckType = visibleDeckType(deck);
+
+              return (
+                <li key={match.id}>
+                  <div className="match-summary">
+                    <strong>
+                      {deck ? formatLegend(deck.legend) : "Tu leyenda"}{deckType && ` · ${deckType}`}
+                      {" contra "}{formatLegend(match.opponent_legend)}
+                      {match.opponent_deck_type && ` · ${match.opponent_deck_type}`}
+                    </strong>
+                    <div>
+                      {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
+                    </div>
+                    <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={saving}
+                    aria-haspopup="dialog"
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      editMatch(match);
+                    }}
+                  >
+                    Editar
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p role="status" hidden={notice !== "Cambios guardados."}>{notice}</p>
+      </section>
+
+      <dialog
+        ref={editDialog}
+        className="panel match-dialog"
+        aria-labelledby="match-edit-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          if (!saveInProgress.current) editMatch(null);
+        }}
+      >
+        <h2 id="match-edit-title" ref={editHeading} tabIndex={-1}>Editar partida</h2>
+        {editingMatch && (
+          <MatchForm
+            key={editingMatch.id}
+            knownLegends={knownLegends}
+            editingMatch={editingMatch}
+            editingDeck={editingDeck}
+            saving={saving}
+            error={error}
+            onSave={(event) => void saveMatch(event, editingMatch)}
+            onCancel={() => editMatch(null)}
+          />
+        )}
+      </dialog>
+    </div>
+  );
+}
+
+function MatchForm({
+  knownLegends, editingMatch, editingDeck, saving, error, onSave, onCancel,
+}: {
+  knownLegends: string[];
+  editingMatch?: Match;
+  editingDeck?: Deck;
+  saving: boolean;
+  error: string;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onCancel?: () => void;
+}) {
+  const [legendQuery, setLegendQuery] = useState(() => formatLegend(editingDeck?.legend ?? ""));
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const legendInput = useRef<HTMLInputElement>(null);
+  const search = normalizeName(legendQuery);
+  const suggestions = knownLegends
+    .filter((legend) => normalizeName(legend).includes(search))
+    .slice(0, 3);
+
+  return (
+    <>
+      <form onSubmit={onSave}>
         <fieldset disabled={saving}>
           <div
             className="legend-picker"
@@ -180,13 +304,17 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
               if (!event.currentTarget.contains(event.relatedTarget)) setShowSuggestions(false);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") setShowSuggestions(false);
+              if (event.key === "Escape" && showSuggestions) {
+                event.preventDefault();
+                setShowSuggestions(false);
+              }
             }}
           >
             <label>
               Tu leyenda
               <input
                 ref={legendInput}
+                name="legend"
                 value={legendQuery}
                 onChange={(event) => {
                   setLegendQuery(event.target.value);
@@ -221,69 +349,65 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
             )}
           </div>
           <label>
+            Tu tipo de mazo (opcional)
+            <input name="deckType" defaultValue={visibleDeckType(editingDeck)} />
+          </label>
+          <label>
             Leyenda rival
             <input
               name="opponentLegend"
+              defaultValue={editingMatch ? formatLegend(editingMatch.opponent_legend) : ""}
               onBlur={(event) => {
                 event.currentTarget.value = formatLegend(event.currentTarget.value);
               }}
               required
             />
           </label>
-          <label>Tipo de mazo rival (opcional)<input name="opponentDeckType" /></label>
-          <fieldset>
-            <legend>Tirada de dado</legend>
-            <div className="result-options">
-              <label>
-                <input type="radio" name="dieRoll" value="lost" aria-label="Perdí el dado" required />
-                <span aria-hidden="true">⚄ ×</span>
-              </label>
-              <label>
-                <input type="radio" name="dieRoll" value="won" aria-label="Gané el dado" required />
-                <span aria-hidden="true">⚄ ✓</span>
-              </label>
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>Resultado de la partida</legend>
-            <div className="result-options">
-              <label>
-                <input type="radio" name="result" value="lost" aria-label="Derrota" required />
-                <span aria-hidden="true">🏆 ×</span>
-              </label>
-              <label>
-                <input type="radio" name="result" value="won" aria-label="Victoria" required />
-                <span aria-hidden="true">🏆 ✓</span>
-              </label>
-            </div>
-          </fieldset>
-          <button type="submit">{saving ? "Guardando…" : "Guardar partida"}</button>
+          <label>
+            Tipo de mazo rival (opcional)
+            <input name="opponentDeckType" defaultValue={editingMatch?.opponent_deck_type ?? ""} />
+          </label>
+          <div className="match-outcomes">
+            <fieldset>
+              <legend>Tirada de dado</legend>
+              <div className="result-options">
+                <label>
+                  <input type="radio" name="dieRoll" value="lost" aria-label="Perdí el dado"
+                    defaultChecked={editingMatch?.won_die_roll === false} required />
+                  <span aria-hidden="true">⚄ ×</span>
+                </label>
+                <label>
+                  <input type="radio" name="dieRoll" value="won" aria-label="Gané el dado"
+                    defaultChecked={editingMatch?.won_die_roll === true} required />
+                  <span aria-hidden="true">⚄ ✓</span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Resultado de la partida</legend>
+              <div className="result-options">
+                <label>
+                  <input type="radio" name="result" value="lost" aria-label="Derrota"
+                    defaultChecked={editingMatch?.won_match === false} required />
+                  <span aria-hidden="true">🏆 ×</span>
+                </label>
+                <label>
+                  <input type="radio" name="result" value="won" aria-label="Victoria"
+                    defaultChecked={editingMatch?.won_match === true} required />
+                  <span aria-hidden="true">🏆 ✓</span>
+                </label>
+              </div>
+            </fieldset>
+          </div>
+          <div className="match-actions">
+            <button type="submit">
+              {saving ? "Guardando…" : editingMatch ? "Guardar cambios" : "Guardar partida"}
+            </button>
+            {editingMatch && <button className="secondary-button" type="button" onClick={onCancel}>Cancelar</button>}
+          </div>
         </fieldset>
       </form>
       {error && <p role="alert">{error}</p>}
-      <p role="status" hidden={!notice}>{notice}</p>
-
-      <h2>Mis partidas recientes</h2>
-      {matches.length === 0 ? <p>Aún no has registrado partidas.</p> : (
-        <ul className="match-list">
-          {matches.map((match) => {
-            const deck = decks.find((item) => item.id === match.deck_id);
-
-            return (
-              <li key={match.id}>
-                <strong>
-                  {deck ? formatLegend(deck.legend) : "Tu leyenda"} contra {formatLegend(match.opponent_legend)}
-                </strong>
-                {match.opponent_deck_type && <span> · {match.opponent_deck_type}</span>}
-                <div>
-                  {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
-                </div>
-                <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    </>
   );
 }
