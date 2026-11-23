@@ -2,6 +2,7 @@
 
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useState, type FormEvent } from "react";
+import { MatchPanel } from "./match-panel";
 
 const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -88,6 +89,7 @@ export function AuthPanel() {
           <button type="button" disabled={busy} onClick={signOut}>
             {busy ? "Cerrando sesión…" : "Cerrar sesión"}
           </button>
+          <MatchPanel key={session.user.id} client={client} userId={session.user.id} />
         </>
       ) : (
         <>
