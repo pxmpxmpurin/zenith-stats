@@ -1,7 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatisticsPanel } from "./statistics-panel";
 
 type Player = { player_id: string; username: string };
@@ -28,8 +28,26 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [playerId, setPlayerId] = useState("");
   const [search, setSearch] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
   const [error, setError] = useState("");
   const [directoryAttempt, setDirectoryAttempt] = useState(0);
+  const playerDetailsHeading = useRef<HTMLHeadingElement>(null);
+  const searchPanel = useRef<HTMLDivElement>(null);
+  const searchField = useRef<HTMLInputElement>(null);
+  const searchList = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    if (!searchActive) return;
+
+    function closeOnOutsidePress(event: PointerEvent) {
+      if (event.target instanceof Node && !searchPanel.current?.contains(event.target)) {
+        setSearchActive(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePress, true);
+  }, [searchActive]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -77,7 +95,14 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
   const selectedPlayer = players?.find((player) => player.player_id === playerId);
   const showAll = playerId === "all";
   const query = search.trim().toLocaleLowerCase("es");
-  const visiblePlayers = players?.filter((player) => player.username.toLocaleLowerCase("es").includes(query));
+  const matchingPlayers = players?.filter((player) => player.username.toLocaleLowerCase("es").includes(query)) ?? [];
+
+  function choosePlayer(id: string) {
+    setPlayerId(id);
+    setSearch("");
+    setSearchActive(false);
+    playerDetailsHeading.current?.focus({ preventScroll: true });
+  }
 
   return (
     <div className="admin-panel">
@@ -95,31 +120,58 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
         {!error && !players && <p role="status">Cargando jugadores…</p>}
         {players?.length === 0 && <p>No hay jugadores con el rol Zenith.</p>}
         {players && players.length > 0 && (
-          <>
+          <div className="player-directory-controls">
             <button type="button" className="secondary-button all-players-button"
-              aria-pressed={showAll} onClick={() => setPlayerId("all")}>
+              aria-pressed={showAll} onClick={() => choosePlayer("all")}>
               Todos los jugadores
             </button>
-            <input type="search" aria-label="Buscar jugador" placeholder="Buscar jugador"
-              value={search} onChange={(event) => setSearch(event.target.value)} />
-            {visiblePlayers?.length === 0 ? <p>Sin coincidencias.</p> : (
-              <ul className="player-list">
-                {visiblePlayers?.map((player) => (
-                  <li key={player.player_id}>
-                    <button type="button" className="secondary-button"
-                      aria-pressed={playerId === player.player_id}
-                      onClick={() => setPlayerId(player.player_id)}>
-                      {player.username}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+            <div className="player-search" ref={searchPanel} data-open={searchActive}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || !searchActive) return;
+                event.preventDefault();
+                searchField.current?.focus();
+                setSearchActive(false);
+              }}>
+              <div className="player-search-field">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="5.5" />
+                  <path d="m15 15 4.5 4.5" />
+                </svg>
+                <input ref={searchField} type="search" aria-label="Buscar jugador" placeholder="Buscar jugador"
+                  autoComplete="off" value={search}
+                  onFocus={() => setSearchActive(true)} onClick={() => setSearchActive(true)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setSearchActive(true);
+                    if (searchList.current) searchList.current.scrollTop = 0;
+                  }} />
+              </div>
+              {searchActive && (
+                <div className="player-search-results">
+                  {matchingPlayers.length > 0 ? (
+                    <ul ref={searchList} className="player-list" aria-label="Jugadores disponibles">
+                      {matchingPlayers.map((player) => (
+                        <li key={player.player_id}>
+                          <button type="button" className="secondary-button"
+                            aria-pressed={playerId === player.player_id}
+                            onClick={() => choosePlayer(player.player_id)}>
+                            {player.username}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p role="status">Sin coincidencias.</p>}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </section>
       <section className="panel player-history" aria-labelledby="player-history-title">
-        <h2 id="player-history-title">{showAll ? "Todos los jugadores" : selectedPlayer?.username ?? "Historial de partidas"}</h2>
+        <h2 id="player-history-title" ref={playerDetailsHeading} tabIndex={-1}>
+          {showAll ? "Todos los jugadores" : selectedPlayer?.username ?? "Historial de partidas"}
+        </h2>
         {showAll && players ? (
           <StatisticsPanel
             client={client}

@@ -1,18 +1,19 @@
 :root {
   color-scheme: dark;
-  --background: #0a151c;
-  --panel: #12232b;
-  --surface: #1b353c;
-  --surface-hover: #254a4e;
-  --field: #0d1d24;
-  --border: #355456;
-  --control-border: #628784;
-  --text: #f0eee3;
-  --muted: #afc4c0;
-  --accent: #8fe0c9;
-  --accent-text: #082421;
-  --zenith-gold: #f5d98b;
-  --zenith-brown: #ae7142;
+  --background: #070c17;
+  --panel: #101a2a;
+  --surface: #19283c;
+  --surface-hover: #243951;
+  --field: #0a1220;
+  --border: #5c4835;
+  --control-border: #967753;
+  --text: #f3e9d4;
+  --muted: #c1bdba;
+  --accent: #edc875;
+  --accent-text: #23170c;
+  --focus: #83deff;
+  --zenith-gold: #f3c86e;
+  --zenith-brown: #a76b38;
 }
 
 * {
@@ -25,8 +26,8 @@ body {
   color: var(--text);
   background: var(--background);
   background-image:
-    radial-gradient(ellipse at 15% 0%, rgb(30 107 106 / 28%), transparent 38rem),
-    radial-gradient(ellipse at 95% 0%, rgb(140 86 45 / 16%), transparent 30rem);
+    radial-gradient(ellipse at 50% 0%, rgb(31 86 147 / 38%), transparent 41rem),
+    radial-gradient(ellipse at 92% 8%, rgb(0 140 195 / 13%), transparent 26rem);
   font-family: system-ui, sans-serif;
   line-height: 1.5;
 }
@@ -39,6 +40,7 @@ main {
 
 h1 {
   margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(2.25rem, 6vw, 3.75rem);
   line-height: 1.05;
 }
@@ -49,7 +51,7 @@ h1 {
 
 @supports (background-clip: text) {
   .brand-zenith {
-    background: linear-gradient(160deg, #fff0be 0%, var(--zenith-gold) 42%, var(--zenith-brown) 88%);
+    background: linear-gradient(155deg, #fff0bd 4%, var(--zenith-gold) 43%, var(--zenith-brown) 90%);
     background-clip: text;
     color: transparent;
   }
@@ -74,6 +76,7 @@ p {
 
 .page-header p {
   margin: 0.5rem 0 0;
+  color: #bdcedd;
 }
 
 .auth-panel {
@@ -85,8 +88,9 @@ p {
   min-inline-size: 0;
   padding: clamp(1rem, 3vw, 1.5rem);
   border: 1px solid var(--border);
-  border-radius: 0.875rem;
+  border-radius: 0.3rem;
   background: var(--panel);
+  box-shadow: inset 0 1px rgb(240 194 113 / 14%);
 }
 
 .login-panel {
@@ -134,7 +138,7 @@ main:has(> .login-panel) .page-header {
 
 .auth-panel button {
   justify-self: start;
-  background: var(--accent);
+  background: linear-gradient(180deg, #f7db98, var(--accent) 70%, #d1a356);
   color: var(--accent-text);
   font-weight: 600;
   cursor: pointer;
@@ -151,7 +155,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .auth-panel :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -160,13 +164,6 @@ main:has(> .login-panel) .page-header {
   align-items: start;
   gap: 1rem;
   margin-top: 1rem;
-}
-
-@media (min-width: 58rem) {
-  .match-panel {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 5fr);
-    gap: 1.5rem;
-  }
 }
 
 .match-panel fieldset {
@@ -223,7 +220,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .result-options input:focus-visible + span {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -303,7 +300,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .match-dialog::backdrop {
-  background: rgb(5 14 18 / 80%);
+  background: rgb(5 10 20 / 80%);
 }
 
 .dashboard-bar {
@@ -403,26 +400,96 @@ main:has(> .login-panel) .page-header {
   gap: 1rem;
 }
 
-@media (min-width: 48rem) {
-  .admin-panel {
-    grid-template-columns: minmax(13rem, 1fr) minmax(0, 2fr);
-  }
+.player-directory {
+  inline-size: min(100%, 34rem);
+  padding: 1rem;
+}
+
+.player-directory h2 {
+  margin-block-end: 0.75rem;
+}
+
+.player-directory-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 0.5rem;
+}
+
+.player-search {
+  position: relative;
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 0.85rem;
+  background: var(--field);
+}
+
+.player-search[data-open="true"] {
+  z-index: 4;
+  border-block-end-color: transparent;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.player-search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-inline-start: 0.75rem;
+}
+
+.player-search-field svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.auth-panel .player-search-field input {
+  min-inline-size: 0;
+  border: 0;
+  padding-inline-start: 0.2rem;
+  background: transparent;
+}
+
+.auth-panel .player-search-field input:focus-visible {
+  outline-offset: -3px;
+}
+
+.player-search-results {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline: -1px;
+  border: 1px solid var(--control-border);
+  border-block-start-color: var(--border);
+  border-radius: 0 0 0.85rem 0.85rem;
+  padding: 0.25rem 0.35rem 0.35rem;
+  background: var(--field);
+  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 40%);
+}
+
+.player-search-results > p {
+  margin: 0.5rem;
 }
 
 .player-list {
-  display: grid;
-  gap: 0.4rem;
-  max-block-size: clamp(9rem, 28vh, 16rem);
-  margin: 0.75rem 0 0;
-  padding: 0.25rem;
-  overflow: auto;
+  margin: 0;
+  padding: 0;
+  max-block-size: 8.25rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   list-style: none;
 }
 
-.player-list button {
+.player-list .secondary-button {
   inline-size: 100%;
+  border-color: transparent;
+  background: transparent;
   overflow-wrap: anywhere;
   text-align: start;
+}
+
+.player-list .secondary-button:not([aria-pressed="true"]):hover {
+  background: var(--surface-hover);
 }
 
 .player-list button[aria-pressed="true"],
@@ -431,19 +498,13 @@ main:has(> .login-panel) .page-header {
   color: var(--accent-text);
 }
 
-.all-players-button {
-  inline-size: 100%;
-  margin-block-end: 0.75rem;
-  text-align: start;
-}
-
 .player-ranking {
-  margin-block-end: 1.5rem;
+  margin-block-end: 2rem;
 }
 
-.player-ranking h3 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
+.group-matrix-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
 }
 
 .player-ranking table {
@@ -462,6 +523,7 @@ main:has(> .login-panel) .page-header {
 
 .player-ranking th {
   overflow-wrap: anywhere;
+  text-align: start;
 }
 
 .player-ranking td:last-child,
@@ -478,7 +540,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .ranking-highlight[data-extreme="high"] {
-  color: var(--accent);
+  color: var(--focus);
 }
 
 .ranking-highlight[data-extreme="low"] {
@@ -496,6 +558,14 @@ main:has(> .login-panel) .page-header {
 .player-history .statistics-panel {
   padding: 0;
   border: 0;
+  box-shadow: none;
+}
+
+.player-history .group-statistics {
+  margin-block-start: 1.75rem;
+  padding-block-start: 1.25rem;
+  border-block-start: 1px solid var(--border);
+  border-radius: 0;
 }
 
 .admin-history li {
@@ -513,7 +583,19 @@ main:has(> .login-panel) .page-header {
   gap: 1rem;
 }
 
+.match-panel,
+.admin-panel,
+.developer-panel,
+.developer-forms {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (min-width: 58rem) {
+  .match-panel {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 5fr);
+    gap: 1.5rem;
+  }
+
   .developer-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

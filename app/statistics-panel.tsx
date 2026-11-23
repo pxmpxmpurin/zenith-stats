@@ -101,8 +101,7 @@ function PlayerRanking({ players, records }: {
   let place = 0;
 
   return (
-    <section className="player-ranking" aria-labelledby="player-ranking-title">
-      <h3 id="player-ranking-title">Ranking de WR</h3>
+    <div className="player-ranking">
       <table>
         <thead>
           <tr><th scope="col">Puesto</th><th scope="col">Jugador</th><th scope="col">WR</th></tr>
@@ -137,7 +136,7 @@ function PlayerRanking({ players, records }: {
           })}
         </tbody>
       </table>
-    </section>
+    </div>
   );
 }
 
@@ -252,9 +251,10 @@ export function StatisticsPanel({
   );
 
   return (
-    <section className="panel statistics-panel" aria-labelledby="statistics-title">
+    <section className={players ? "panel statistics-panel group-statistics" : "panel statistics-panel"}
+      aria-labelledby="statistics-title">
       <div className="statistics-heading">
-        <h2 id="statistics-title">{players ? "Matriz conjunta" : "Matriz de enfrentamientos"}</h2>
+        <h2 id="statistics-title">{players ? "Ranking de WR" : "Matriz de enfrentamientos"}</h2>
         {matches && matches.length > 0 && (
           <select aria-label="Filtro de dado" value={filter} onChange={(event) => setFilter(event.target.value as DieFilter)}>
             <option value="all">Dado · Todas</option>
@@ -275,7 +275,12 @@ export function StatisticsPanel({
         <p role="status">Cargando estadísticas…</p>
       ) : (
         <>
-          {players && <PlayerRanking players={players} records={playerRecords} />}
+          {players && (
+            <>
+              <PlayerRanking players={players} records={playerRecords} />
+              <h3 className="group-matrix-title">Matriz conjunta</h3>
+            </>
+          )}
           {matches.length === 0 ? <p>{emptyMessage}</p> : (
             <>
               <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>
