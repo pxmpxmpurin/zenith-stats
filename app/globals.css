@@ -185,6 +185,17 @@ main:has(> .login-panel) .page-header {
   gap: 1rem 1.5rem;
 }
 
+.match-scheduling {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.match-scheduling label {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+}
+
 .result-options {
   display: flex;
   gap: 0.5rem;
@@ -283,6 +294,17 @@ main:has(> .login-panel) .page-header {
 
 .match-summary time {
   color: var(--muted);
+}
+
+.match-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.match-date span {
+  color: var(--accent);
 }
 
 .match-actions {
@@ -384,7 +406,15 @@ main:has(> .login-panel) .page-header {
   margin: 0;
 }
 
-.statistics-heading select {
+.statistics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.statistics-heading select,
+.match-scheduling select {
+  min-inline-size: 0;
   min-block-size: 2.75rem;
   padding: 0.5rem;
   border: 1px solid var(--control-border);
@@ -524,6 +554,23 @@ main:has(> .login-panel) .page-header {
 .player-ranking th {
   overflow-wrap: anywhere;
   text-align: start;
+}
+
+.auth-panel .ranking-player-button {
+  min-block-size: 2rem;
+  max-inline-size: 100%;
+  padding: 0.2rem 0.65rem;
+  border-color: var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.auth-panel .ranking-player-button:hover {
+  border-color: var(--control-border);
+  background: var(--surface-hover);
 }
 
 .player-ranking td:last-child,

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AdminPanel } from "./admin-panel";
 import { DeveloperPanel, type CatalogLegend } from "./developer-panel";
+import { expansions, formatMatchDate, matchDay, matchExpansion } from "./expansions";
 import { StatisticsPanel } from "./statistics-panel";
 
 type Deck = { id: string; legend: string; deck_type: string };
@@ -16,13 +17,19 @@ type Match = {
   won_die_roll: boolean;
   won_match: boolean;
   played_at: string;
+  expansion_override: string | null;
 };
 
 const recentLimit = 50;
-const dateFormat = new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" });
-const matchColumns = "id, deck_id, opponent_legend, opponent_deck_type, won_die_roll, won_match, played_at";
+const matchColumns = "id, deck_id, opponent_legend, opponent_deck_type, won_die_roll, won_match, played_at, expansion_override";
 const deckColumns = "id, legend, deck_type";
 const unspecifiedDeckType = "Sin especificar";
+
+function updateRecentMatches(current: Match[], saved: Match) {
+  return [saved, ...current.filter((match) => match.id !== saved.id)]
+    .sort((a, b) => Date.parse(b.played_at) - Date.parse(a.played_at) || a.id.localeCompare(b.id))
+    .slice(0, recentLimit);
+}
 
 function normalizeName(name: string) {
   return name.trim().toLowerCase();
@@ -155,6 +162,10 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
     const deckType = capitalizeInitial(String(fields.get("deckType") ?? "")) || unspecifiedDeckType;
     const dieRoll = fields.get("dieRoll");
     const result = fields.get("result");
+    const date = String(fields.get("playedOn") ?? "");
+    const override = String(fields.get("expansion") ?? "");
+    const today = matchDay();
+    const dateStart = Date.parse(`${date}T00:00:00.000Z`);
 
     setNotice("");
     setError("");
@@ -168,6 +179,15 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
       setError("Completa los campos obligatorios.");
       return;
     }
+    if (!Number.isFinite(dateStart) || matchDay(new Date(dateStart).toISOString()) !== date || date > today) {
+      setError("Elige la fecha de la partida. Debe ser hoy o un día anterior.");
+      return;
+    }
+    if (override && !expansions.some((item) => item.name === override)) {
+      setError("Elige una expansión de la lista.");
+      return;
+    }
+    const dateChanged = editingMatch ? matchDay(editingMatch.played_at) !== date : date !== today;
 
     saveInProgress.current = true;
     setSaving(true);
@@ -203,6 +223,8 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
         opponent_deck_type: opponentDeckType || null,
         won_die_roll: dieRoll === "won",
         won_match: result === "won",
+        expansion_override: override || null,
+        ...(dateChanged ? { played_at: new Date(dateStart).toISOString() } : {}),
       };
 
       if (editingMatch) {
@@ -210,14 +232,19 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
           .update(match).eq("user_id", userId).eq("id", editingMatch.id)
           .select(matchColumns).single();
         if (updateError) throw updateError;
-        setMatches((current) => current.map((item) => item.id === updatedMatch.id ? updatedMatch : item));
+        setMatches((current) => updateRecentMatches(current, updatedMatch));
+        if (dateChanged) {
+          const { data } = await client.from("matches").select(matchColumns).eq("user_id", userId)
+            .order("played_at", { ascending: false }).order("id").limit(recentLimit);
+          if (data) setMatches(data);
+        }
         setStatisticsRevision((revision) => revision + 1);
         editMatch(null);
         setNotice("Cambios guardados.");
         return;
       }
 
-      const signature = JSON.stringify(match);
+      const signature = JSON.stringify({ ...match, played_at: date });
       if (pendingMatch.current?.fields !== signature) {
         pendingMatch.current = { id: crypto.randomUUID(), fields: signature };
       }
@@ -237,7 +264,7 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
       if (!savedMatch) throw new Error("No se pudo confirmar la partida.");
 
       pendingMatch.current = null;
-      setMatches((current) => [savedMatch, ...current].slice(0, recentLimit));
+      setMatches((current) => updateRecentMatches(current, savedMatch));
       setStatisticsRevision((revision) => revision + 1);
       setEntry((current) => ({ version: current.version + 1, legend }));
       setNotice("Partida guardada.");
@@ -297,6 +324,7 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
               {matches.map((match) => {
                 const deck = decks.find((item) => item.id === match.deck_id);
                 const deckType = visibleDeckType(deck);
+                const expansion = matchExpansion(match.played_at, match.expansion_override);
 
                 return (
                   <li key={match.id}>
@@ -310,7 +338,10 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
                       <div>
                         {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
                       </div>
-                      <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
+                      <div className="match-date">
+                        <time dateTime={match.played_at}>{formatMatchDate(match.played_at)}</time>
+                        {expansion && <span>{expansion}</span>}
+                      </div>
                     </div>
                     <button
                       className="secondary-button"
@@ -490,6 +521,9 @@ function MatchForm({
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onCancel?: () => void;
 }) {
+  const [date, setDate] = useState(() => editingMatch ? matchDay(editingMatch.played_at) : matchDay());
+  const automaticExpansion = matchExpansion(date);
+
   return (
     <>
       <form onSubmit={onSave}>
@@ -517,6 +551,20 @@ function MatchForm({
               }}
             />
           </label>
+          <div className="match-scheduling">
+            <label>
+              Fecha de la partida
+              <input type="date" name="playedOn" value={date} max={matchDay()}
+                onChange={(event) => setDate(event.target.value)} required />
+            </label>
+            <label>
+              Expansión
+              <select name="expansion" defaultValue={editingMatch?.expansion_override ?? ""}>
+                <option value="">{automaticExpansion ? `Automática · ${automaticExpansion}` : "Automática"}</option>
+                {expansions.map(({ name }) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+          </div>
           <div className="match-outcomes">
             <fieldset>
               <legend>Tirada de dado</legend>

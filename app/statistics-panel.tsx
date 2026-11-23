@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
+import { expansions, matchExpansion } from "./expansions";
 
 type Deck = { legend: string; deck_type: string };
 type StatisticsMatch = {
@@ -9,6 +10,8 @@ type StatisticsMatch = {
   user_id: string;
   decks: Deck;
   opponent_legend: string;
+  played_at: string;
+  expansion_override: string | null;
   won_die_roll: boolean;
   won_match: boolean;
 };
@@ -22,8 +25,8 @@ type MatrixRow = {
   cells: Map<string, MatchRecord>;
 };
 type StatisticsScope =
-  | { userId: string; players?: never }
-  | { userId?: never; players: RankedPlayer[] };
+  | { userId: string; players?: never; onPlayerSelect?: never }
+  | { userId?: never; players: RankedPlayer[]; onPlayerSelect: (playerId: string) => void };
 
 const percent = new Intl.NumberFormat("es", { style: "percent", maximumFractionDigits: 1 });
 const portraitBase = "https://ddragon.leagueoflegends.com/cdn/16.23.1/img/champion";
@@ -84,9 +87,10 @@ function RecordCell({ record }: { record?: MatchRecord }) {
   );
 }
 
-function PlayerRanking({ players, records }: {
+function PlayerRanking({ players, records, onPlayerSelect }: {
   players: RankedPlayer[];
   records: Map<string, MatchRecord>;
+  onPlayerSelect: (playerId: string) => void;
 }) {
   if (!players.length) return null;
 
@@ -118,7 +122,11 @@ function PlayerRanking({ players, records }: {
               <tr key={player.player_id}>
                 <td>{player.rate === null ? "—" : place}</td>
                 <th scope="row">
-                  {player.username}
+                  <button type="button" className="ranking-player-button"
+                    aria-label={`Ver partidas de ${player.username}`}
+                    onClick={() => onPlayerSelect(player.player_id)}>
+                    {player.username}
+                  </button>
                   {distinction && <span className="ranking-highlight" data-extreme={top ? "high" : "low"}>
                     {distinction}
                   </span>}
@@ -141,7 +149,7 @@ function PlayerRanking({ players, records }: {
 }
 
 export function StatisticsPanel({
-  client, userId, players, hidden, revision, showLegend, showDeckType,
+  client, userId, players, onPlayerSelect, hidden, revision, showLegend, showDeckType,
   emptyMessage = "Registra una partida para ver tus enfrentamientos.",
 }: {
   client: SupabaseClient;
@@ -153,6 +161,7 @@ export function StatisticsPanel({
 } & StatisticsScope) {
   const [matches, setMatches] = useState<StatisticsMatch[] | null>(null);
   const [filter, setFilter] = useState<DieFilter>("all");
+  const [expansion, setExpansion] = useState("");
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -174,7 +183,7 @@ export function StatisticsPanel({
           while (!request.signal.aborted) {
             const query = client.from("matches")
               .select(
-                "id, user_id, opponent_legend, won_die_roll, won_match, decks!inner(legend, deck_type)",
+                "id, user_id, opponent_legend, played_at, expansion_override, won_die_roll, won_match, decks!inner(legend, deck_type)",
                 lastId ? undefined : { count: "exact" },
               )
               .order("id").limit(500);
@@ -211,8 +220,8 @@ export function StatisticsPanel({
   const playerRecords = new Map<string, MatchRecord>(
     players?.map((player) => [player.player_id, { wins: 0, total: 0 }]),
   );
-
   for (const match of matches ?? []) {
+    if (expansion && matchExpansion(match.played_at, match.expansion_override) !== expansion) continue;
     const legend = showLegend(match.decks.legend);
     const deckType = showDeckType(match.decks);
     const opponent = showLegend(match.opponent_legend);
@@ -256,11 +265,17 @@ export function StatisticsPanel({
       <div className="statistics-heading">
         <h2 id="statistics-title">{players ? "Ranking de WR" : "Matriz de enfrentamientos"}</h2>
         {matches && matches.length > 0 && (
-          <select aria-label="Filtro de dado" value={filter} onChange={(event) => setFilter(event.target.value as DieFilter)}>
-            <option value="all">Dado · Todas</option>
-            <option value="won">Dado · Ganado</option>
-            <option value="lost">Dado · Perdido</option>
-          </select>
+          <div className="statistics-filters">
+            <select aria-label="Expansión" value={expansion} onChange={(event) => setExpansion(event.target.value)}>
+              <option value="">Expansión · Todas</option>
+              {expansions.map(({ name }) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <select aria-label="Filtro de dado" value={filter} onChange={(event) => setFilter(event.target.value as DieFilter)}>
+              <option value="all">Dado · Todas</option>
+              <option value="won">Dado · Ganado</option>
+              <option value="lost">Dado · Perdido</option>
+            </select>
+          </div>
         )}
       </div>
       {error ? (
@@ -277,11 +292,11 @@ export function StatisticsPanel({
         <>
           {players && (
             <>
-              <PlayerRanking players={players} records={playerRecords} />
+              <PlayerRanking players={players} records={playerRecords} onPlayerSelect={onPlayerSelect} />
               <h3 className="group-matrix-title">Matriz conjunta</h3>
             </>
           )}
-          {matches.length === 0 ? <p>{emptyMessage}</p> : (
+          {sortedRows.length === 0 ? <p>{expansion ? "No hay partidas de esta expansión." : emptyMessage}</p> : (
             <>
               <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>
               <div className="matrix-scroll" role="region" aria-label="Matriz de enfrentamientos"

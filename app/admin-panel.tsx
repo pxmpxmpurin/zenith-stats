@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
+import { formatMatchDate, matchExpansion } from "./expansions";
 import { StatisticsPanel } from "./statistics-panel";
 
 type Player = { player_id: string; username: string };
@@ -12,13 +13,13 @@ type PlayerMatch = {
   opponent_legend: string;
   opponent_deck_type: string | null;
   played_at: string;
+  expansion_override: string | null;
   won_die_roll: boolean;
   won_match: boolean;
 };
 type History = { page: number; matches: PlayerMatch[]; hasMore: boolean };
 
 const pageSize = 50;
-const dateFormat = new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" });
 
 export function AdminPanel({ client, showLegend, showDeckType }: {
   client: SupabaseClient;
@@ -26,7 +27,7 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
   showDeckType: (deck: PlayerMatch["decks"]) => string;
 }) {
   const [players, setPlayers] = useState<Player[] | null>(null);
-  const [playerId, setPlayerId] = useState("");
+  const [playerId, setPlayerId] = useState("all");
   const [search, setSearch] = useState("");
   const [searchActive, setSearchActive] = useState(false);
   const [error, setError] = useState("");
@@ -101,7 +102,7 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
     setPlayerId(id);
     setSearch("");
     setSearchActive(false);
-    playerDetailsHeading.current?.focus({ preventScroll: true });
+    playerDetailsHeading.current?.focus();
   }
 
   return (
@@ -172,16 +173,19 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
         <h2 id="player-history-title" ref={playerDetailsHeading} tabIndex={-1}>
           {showAll ? "Todos los jugadores" : selectedPlayer?.username ?? "Historial de partidas"}
         </h2>
-        {showAll && players ? (
-          <StatisticsPanel
-            client={client}
-            players={players}
-            hidden={false}
-            revision={0}
-            emptyMessage="Los jugadores Zenith todavía no tienen partidas registradas."
-            showLegend={showLegend}
-            showDeckType={showDeckType}
-          />
+        {showAll ? (
+          players && (
+            <StatisticsPanel
+              client={client}
+              players={players}
+              onPlayerSelect={choosePlayer}
+              hidden={false}
+              revision={0}
+              emptyMessage="Los jugadores Zenith todavía no tienen partidas registradas."
+              showLegend={showLegend}
+              showDeckType={showDeckType}
+            />
+          )
         ) : selectedPlayer ? (
           <PlayerDetails key={playerId} client={client} playerId={playerId}
             showLegend={showLegend} showDeckType={showDeckType} />
@@ -245,7 +249,7 @@ function PlayerHistory({ client, playerId, showLegend, showDeckType }: PlayerDet
       try {
         const start = page * pageSize;
         const { data, error: queryError } = await client.from("matches")
-          .select("id, opponent_legend, opponent_deck_type, played_at, won_die_roll, won_match, decks!inner(legend, deck_type)")
+          .select("id, opponent_legend, opponent_deck_type, played_at, expansion_override, won_die_roll, won_match, decks!inner(legend, deck_type)")
           .eq("user_id", playerId).order("played_at", { ascending: false }).order("id")
           .range(start, start + pageSize).abortSignal(request.signal)
           .overrideTypes<PlayerMatch[], { merge: false }>();
@@ -276,6 +280,7 @@ function PlayerHistory({ client, playerId, showLegend, showDeckType }: PlayerDet
         <ul className="match-list admin-history">
           {history.matches.map((match) => {
             const deckType = showDeckType(match.decks);
+            const expansion = matchExpansion(match.played_at, match.expansion_override);
 
             return (
               <li key={match.id}>
@@ -288,7 +293,10 @@ function PlayerHistory({ client, playerId, showLegend, showDeckType }: PlayerDet
                   <div>
                     {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Dado ganado" : "Dado perdido"}
                   </div>
-                  <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
+                  <div className="match-date">
+                    <time dateTime={match.played_at}>{formatMatchDate(match.played_at)}</time>
+                    {expansion && <span>{expansion}</span>}
+                  </div>
                 </div>
               </li>
             );
