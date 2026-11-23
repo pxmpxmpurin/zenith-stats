@@ -21,3 +21,48 @@ p {
   color: #c1c3d1;
   font-size: 1.125rem;
 }
+
+.auth-panel {
+  max-width: 24rem;
+  margin-top: 2rem;
+}
+
+.auth-panel form,
+.auth-panel label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-panel form {
+  gap: 1rem;
+}
+
+.auth-panel input,
+.auth-panel button {
+  border: 1px solid #7f8299;
+  border-radius: 0.4rem;
+  padding: 0.65rem 0.8rem;
+  font: inherit;
+}
+
+.auth-panel input {
+  background: #202230;
+  color: inherit;
+}
+
+.auth-panel button {
+  justify-self: start;
+  background: #c9d0ff;
+  color: #14151d;
+  cursor: pointer;
+}
+
+.auth-panel button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.auth-panel :focus-visible {
+  outline: 2px solid #c9d0ff;
+  outline-offset: 3px;
+}
