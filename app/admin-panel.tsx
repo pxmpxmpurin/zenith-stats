@@ -75,6 +75,7 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
   }, [client, directoryAttempt]);
 
   const selectedPlayer = players?.find((player) => player.player_id === playerId);
+  const showAll = playerId === "all";
   const query = search.trim().toLocaleLowerCase("es");
   const visiblePlayers = players?.filter((player) => player.username.toLocaleLowerCase("es").includes(query));
 
@@ -95,6 +96,10 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
         {players?.length === 0 && <p>No hay jugadores con el rol Zenith.</p>}
         {players && players.length > 0 && (
           <>
+            <button type="button" className="secondary-button all-players-button"
+              aria-pressed={showAll} onClick={() => setPlayerId("all")}>
+              Todos los jugadores
+            </button>
             <input type="search" aria-label="Buscar jugador" placeholder="Buscar jugador"
               value={search} onChange={(event) => setSearch(event.target.value)} />
             {visiblePlayers?.length === 0 ? <p>Sin coincidencias.</p> : (
@@ -114,8 +119,18 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
         )}
       </section>
       <section className="panel player-history" aria-labelledby="player-history-title">
-        <h2 id="player-history-title">{selectedPlayer?.username ?? "Historial de partidas"}</h2>
-        {selectedPlayer ? (
+        <h2 id="player-history-title">{showAll ? "Todos los jugadores" : selectedPlayer?.username ?? "Historial de partidas"}</h2>
+        {showAll && players ? (
+          <StatisticsPanel
+            client={client}
+            players={players}
+            hidden={false}
+            revision={0}
+            emptyMessage="Los jugadores Zenith todavía no tienen partidas registradas."
+            showLegend={showLegend}
+            showDeckType={showDeckType}
+          />
+        ) : selectedPlayer ? (
           <PlayerDetails key={playerId} client={client} playerId={playerId}
             showLegend={showLegend} showDeckType={showDeckType} />
         ) : <p>Elige un jugador para consultar sus partidas.</p>}

@@ -425,9 +425,64 @@ main:has(> .login-panel) .page-header {
   text-align: start;
 }
 
-.player-list button[aria-pressed="true"] {
+.player-list button[aria-pressed="true"],
+.player-directory .all-players-button[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-text);
+}
+
+.all-players-button {
+  inline-size: 100%;
+  margin-block-end: 0.75rem;
+  text-align: start;
+}
+
+.player-ranking {
+  margin-block-end: 1.5rem;
+}
+
+.player-ranking h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.player-ranking table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-ranking th,
+.player-ranking td {
+  padding: 0.5rem;
+  border-block-end: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.player-ranking th {
+  overflow-wrap: anywhere;
+}
+
+.player-ranking td:last-child,
+.player-ranking thead th:last-child {
+  text-align: end;
+}
+
+.player-ranking small,
+.ranking-highlight {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.ranking-highlight[data-extreme="high"] {
+  color: var(--accent);
+}
+
+.ranking-highlight[data-extreme="low"] {
+  color: #ffc1cb;
 }
 
 .player-history h2 {
