@@ -1,9 +1,11 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { StatisticsPanel } from "./statistics-panel";
 
 type Deck = { id: string; legend: string; deck_type: string };
+type Legend = { name: string; champion: string; title: string };
 type Match = {
   id: string;
   deck_id: string;
@@ -28,14 +30,32 @@ function formatLegend(legend: string) {
   return normalizeName(legend).replace(/^./u, (firstLetter) => firstLetter.toUpperCase());
 }
 
-function visibleDeckType(deck?: Deck) {
+function catalogName(legends: Legend[], storedName: string) {
+  const key = normalizeName(storedName);
+  const exact = legends.find((legend) => normalizeName(legend.name) === key);
+  if (exact) return exact.name;
+
+  const aliases = legends.filter((legend) =>
+    normalizeName(legend.champion) === key || normalizeName(legend.title) === key,
+  );
+  return aliases.length === 1 ? aliases[0].name : "";
+}
+
+function visibleDeckType(deck?: Pick<Deck, "deck_type">) {
   if (!deck || normalizeName(deck.deck_type) === normalizeName(unspecifiedDeckType)) return "";
   return deck.deck_type;
 }
 
-export function MatchPanel({ client, userId }: { client: SupabaseClient; userId: string }) {
+export function MatchPanel({ client, userId, accountMenu }: {
+  client: SupabaseClient;
+  userId: string;
+  accountMenu: ReactNode;
+}) {
+  const [view, setView] = useState<"matches" | "statistics">("matches");
   const [decks, setDecks] = useState<Deck[]>([]);
+  const [legends, setLegends] = useState<Legend[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [entry, setEntry] = useState({ version: 0, legend: "" });
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -46,9 +66,6 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
   const editHeading = useRef<HTMLHeadingElement>(null);
   const pendingMatch = useRef<{ id: string; fields: string } | null>(null);
   const saveInProgress = useRef(false);
-  const knownLegends = [...new Map(
-    decks.map((deck) => [normalizeName(deck.legend), formatLegend(deck.legend)]),
-  ).values()];
   const editingDeck = decks.find((deck) => deck.id === editingMatch?.deck_id);
 
   useEffect(() => {
@@ -56,17 +73,20 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
 
     async function load() {
       try {
-        const [deckResult, matchResult] = await Promise.all([
+        const [deckResult, matchResult, legendResult] = await Promise.all([
           client.from("decks").select(deckColumns).eq("user_id", userId)
             .order("legend").order("deck_type").abortSignal(request.signal),
           client.from("matches").select(matchColumns).eq("user_id", userId)
             .order("played_at", { ascending: false }).order("id")
             .limit(recentLimit).abortSignal(request.signal),
+          client.from("legends").select("name, champion, title")
+            .order("champion").order("title").abortSignal(request.signal),
         ]);
         if (request.signal.aborted) return;
-        if (deckResult.error || matchResult.error) throw new Error("No se pudieron cargar los datos.");
+        if (deckResult.error || matchResult.error || legendResult.error) throw new Error("No se pudieron cargar los datos.");
         setDecks(deckResult.data);
         setMatches(matchResult.data);
+        setLegends(legendResult.data);
       } catch {
         if (!request.signal.aborted) setLoadError(true);
       } finally {
@@ -98,20 +118,22 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
     event.preventDefault();
     if (saveInProgress.current) return;
 
-    const form = event.currentTarget;
-    const fields = new FormData(form);
-    const opponentLegend = formatLegend(String(fields.get("opponentLegend") ?? ""));
+    const fields = new FormData(event.currentTarget);
+    const opponentLegend = String(fields.get("opponentLegend") ?? "");
     const opponentDeckType = String(fields.get("opponentDeckType") ?? "").trim();
-    const legend = formatLegend(String(fields.get("legend") ?? ""));
-    const search = normalizeName(legend);
+    const legend = String(fields.get("legend") ?? "");
     const deckType = String(fields.get("deckType") ?? "").trim() || unspecifiedDeckType;
     const dieRoll = fields.get("dieRoll");
     const result = fields.get("result");
 
     setNotice("");
     setError("");
-    if (!opponentLegend || !legend ||
-        (dieRoll !== "won" && dieRoll !== "lost") ||
+    if (!legends.some((item) => item.name === legend) ||
+        !legends.some((item) => item.name === opponentLegend)) {
+      setError("Selecciona ambas leyendas de la lista.");
+      return;
+    }
+    if ((dieRoll !== "won" && dieRoll !== "lost") ||
         (result !== "won" && result !== "lost")) {
       setError("Completa los campos obligatorios.");
       return;
@@ -122,7 +144,7 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
 
     try {
       const matchesDeck = (deck: Deck) => (
-        normalizeName(deck.legend) === search &&
+        deck.legend === legend &&
         normalizeName(deck.deck_type) === normalizeName(deckType)
       );
       let selectedDeck = decks.find(matchesDeck);
@@ -185,7 +207,7 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
 
       pendingMatch.current = null;
       setMatches((current) => [savedMatch, ...current].slice(0, recentLimit));
-      form.reset();
+      setEntry((current) => ({ version: current.version + 1, legend }));
       setNotice("Partida guardada.");
     } catch {
       setError("No se pudo guardar la partida. Inténtalo de nuevo.");
@@ -195,90 +217,206 @@ export function MatchPanel({ client, userId }: { client: SupabaseClient; userId:
     }
   }
 
-  if (loading) return <p role="status">Cargando partidas…</p>;
-  if (loadError) return <p role="alert">No se pudieron cargar tus datos. Recarga la página para reintentar.</p>;
+  function showLegend(name: string) {
+    return catalogName(legends, name) || formatLegend(name);
+  }
 
   return (
-    <div className="match-panel">
-      <section className="panel match-entry" aria-labelledby="match-entry-title">
-        <h2 id="match-entry-title">Registrar partida</h2>
-        <MatchForm knownLegends={knownLegends} saving={saving} error={editingMatch ? "" : error}
-          onSave={(event) => void saveMatch(event, null)} />
-        <p role="status" hidden={notice !== "Partida guardada."}>{notice}</p>
-      </section>
+    <div>
+      <div className="dashboard-bar">
+        <nav className="dashboard-menu" aria-label="Vistas de Zenith Stats">
+          <button type="button" aria-pressed={view === "matches"} onClick={() => setView("matches")}>
+            Partidas
+          </button>
+          <button type="button" aria-pressed={view === "statistics"} onClick={() => setView("statistics")}>
+            Estadísticas
+          </button>
+        </nav>
+        {accountMenu}
+      </div>
+      {loading && <p role="status">Cargando partidas…</p>}
+      {loadError && <p role="alert">No se pudieron cargar tus datos. Recarga la página para reintentar.</p>}
+      <div className="match-panel" hidden={loading || loadError || view !== "matches"}>
+        <section className="panel match-entry" aria-labelledby="match-entry-title">
+          <h2 id="match-entry-title">Registrar partida</h2>
+          <MatchForm key={entry.version} legends={legends} initialLegend={entry.legend}
+            saving={saving} error={editingMatch ? "" : error}
+            onSave={(event) => void saveMatch(event, null)} />
+          <p role="status" hidden={notice !== "Partida guardada."}>{notice}</p>
+        </section>
 
-      <section className="panel match-history" aria-labelledby="match-history-title">
-        <h2 id="match-history-title">Mis partidas recientes</h2>
-        {matches.length === 0 ? <p>Aún no has registrado partidas.</p> : (
-          <ul className="match-list">
-            {matches.map((match) => {
-              const deck = decks.find((item) => item.id === match.deck_id);
-              const deckType = visibleDeckType(deck);
+        <section className="panel match-history" aria-labelledby="match-history-title">
+          <h2 id="match-history-title">Mis partidas recientes</h2>
+          {matches.length === 0 ? <p>Aún no has registrado partidas.</p> : (
+            <ul className="match-list">
+              {matches.map((match) => {
+                const deck = decks.find((item) => item.id === match.deck_id);
+                const deckType = visibleDeckType(deck);
 
-              return (
-                <li key={match.id}>
-                  <div className="match-summary">
-                    <strong>
-                      {deck ? formatLegend(deck.legend) : "Tu leyenda"}{deckType && ` · ${deckType}`}
-                      {" contra "}{formatLegend(match.opponent_legend)}
-                      {match.opponent_deck_type && ` · ${match.opponent_deck_type}`}
-                    </strong>
-                    <div>
-                      {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
+                return (
+                  <li key={match.id}>
+                    <div className="match-summary">
+                      <strong>
+                        {deck ? showLegend(deck.legend) : "Tu leyenda"}
+                        {deckType && ` · ${deckType}`}
+                        {" contra "}{showLegend(match.opponent_legend)}
+                        {match.opponent_deck_type && ` · ${match.opponent_deck_type}`}
+                      </strong>
+                      <div>
+                        {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
+                      </div>
+                      <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
                     </div>
-                    <time dateTime={match.played_at}>{dateFormat.format(new Date(match.played_at))}</time>
-                  </div>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={saving}
-                    aria-haspopup="dialog"
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      editMatch(match);
-                    }}
-                  >
-                    Editar
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <p role="status" hidden={notice !== "Cambios guardados."}>{notice}</p>
-      </section>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={saving}
+                      aria-haspopup="dialog"
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        editMatch(match);
+                      }}
+                    >
+                      Editar
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p role="status" hidden={notice !== "Cambios guardados."}>{notice}</p>
+        </section>
 
-      <dialog
-        ref={editDialog}
-        className="panel match-dialog"
-        aria-labelledby="match-edit-title"
-        onCancel={(event) => {
+        <dialog
+          ref={editDialog}
+          className="panel match-dialog"
+          aria-labelledby="match-edit-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            if (!saveInProgress.current) editMatch(null);
+          }}
+        >
+          <h2 id="match-edit-title" ref={editHeading} tabIndex={-1}>Editar partida</h2>
+          {editingMatch && (
+            <MatchForm
+              key={editingMatch.id}
+              legends={legends}
+              initialLegend={editingDeck?.legend}
+              editingMatch={editingMatch}
+              editingDeck={editingDeck}
+              saving={saving}
+              error={error}
+              onSave={(event) => void saveMatch(event, editingMatch)}
+              onCancel={() => editMatch(null)}
+            />
+          )}
+        </dialog>
+      </div>
+      {!loading && !loadError && view === "statistics" && (
+        <StatisticsPanel
+          client={client}
+          userId={userId}
+          showLegend={showLegend}
+          showDeckType={visibleDeckType}
+        />
+      )}
+    </div>
+  );
+}
+
+function LegendPicker({ name, label, legends, initialValue = "" }: {
+  name: string;
+  label: string;
+  legends: Legend[];
+  initialValue?: string;
+}) {
+  const [selected, setSelected] = useState(() => catalogName(legends, initialValue));
+  const [query, setQuery] = useState(selected || formatLegend(initialValue));
+  const [open, setOpen] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const firstOption = useRef<HTMLButtonElement>(null);
+  const search = normalizeName(query);
+  const suggestions = legends.filter((legend) =>
+    normalizeName(legend.name).includes(search) ||
+    normalizeName(`${legend.champion} ${legend.title}`).includes(search),
+  ).slice(0, 3);
+
+  function selectLegend(legend: Legend) {
+    setSelected(legend.name);
+    setQuery(legend.name);
+    input.current?.focus();
+    setOpen(false);
+  }
+
+  return (
+    <div
+      className="legend-picker"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
           event.preventDefault();
-          if (!saveInProgress.current) editMatch(null);
-        }}
-      >
-        <h2 id="match-edit-title" ref={editHeading} tabIndex={-1}>Editar partida</h2>
-        {editingMatch && (
-          <MatchForm
-            key={editingMatch.id}
-            knownLegends={knownLegends}
-            editingMatch={editingMatch}
-            editingDeck={editingDeck}
-            saving={saving}
-            error={error}
-            onSave={(event) => void saveMatch(event, editingMatch)}
-            onCancel={() => editMatch(null)}
-          />
-        )}
-      </dialog>
+          input.current?.focus();
+          setOpen(false);
+        }
+      }}
+    >
+      <label>
+        {label}
+        <input
+          ref={input}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setSelected("");
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              if (open) firstOption.current?.focus();
+              else setOpen(true);
+            }
+            if (event.key === "Enter" && open && suggestions.length > 0) {
+              event.preventDefault();
+              selectLegend(suggestions[0]);
+            }
+          }}
+          placeholder="Busca por campeón o leyenda"
+          autoComplete="off"
+          required
+        />
+      </label>
+      <input type="hidden" name={name} value={selected} />
+      {open && (
+        <ul className="legend-suggestions" aria-label={label}>
+          {suggestions.length === 0 && <li className="legend-empty">Sin coincidencias</li>}
+          {suggestions.map((legend, index) => (
+            <li key={legend.name}>
+              <button
+                ref={index === 0 ? firstOption : undefined}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectLegend(legend)}
+              >
+                {legend.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 function MatchForm({
-  knownLegends, editingMatch, editingDeck, saving, error, onSave, onCancel,
+  legends, initialLegend = "", editingMatch, editingDeck, saving, error, onSave, onCancel,
 }: {
-  knownLegends: string[];
+  legends: Legend[];
+  initialLegend?: string;
   editingMatch?: Match;
   editingDeck?: Deck;
   saving: boolean;
@@ -286,83 +424,17 @@ function MatchForm({
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onCancel?: () => void;
 }) {
-  const [legendQuery, setLegendQuery] = useState(() => formatLegend(editingDeck?.legend ?? ""));
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const legendInput = useRef<HTMLInputElement>(null);
-  const search = normalizeName(legendQuery);
-  const suggestions = knownLegends
-    .filter((legend) => normalizeName(legend).includes(search))
-    .slice(0, 3);
-
   return (
     <>
       <form onSubmit={onSave}>
         <fieldset disabled={saving}>
-          <div
-            className="legend-picker"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) setShowSuggestions(false);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && showSuggestions) {
-                event.preventDefault();
-                setShowSuggestions(false);
-              }
-            }}
-          >
-            <label>
-              Tu leyenda
-              <input
-                ref={legendInput}
-                name="legend"
-                value={legendQuery}
-                onChange={(event) => {
-                  setLegendQuery(event.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setLegendQuery(formatLegend)}
-                onClick={() => setShowSuggestions(true)}
-                placeholder="Busca o escribe una leyenda"
-                autoComplete="off"
-                required
-              />
-            </label>
-            {showSuggestions && suggestions.length > 0 && (
-              <ul className="legend-suggestions" aria-label="Leyendas guardadas">
-                {suggestions.map((legend) => (
-                  <li key={legend}>
-                    <button
-                      type="button"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        setLegendQuery(legend);
-                        legendInput.current?.focus();
-                        setShowSuggestions(false);
-                      }}
-                    >
-                      {legend}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <LegendPicker name="legend" label="Tu leyenda" legends={legends} initialValue={initialLegend} />
           <label>
             Tu tipo de mazo (opcional)
             <input name="deckType" defaultValue={visibleDeckType(editingDeck)} />
           </label>
-          <label>
-            Leyenda rival
-            <input
-              name="opponentLegend"
-              defaultValue={editingMatch ? formatLegend(editingMatch.opponent_legend) : ""}
-              onBlur={(event) => {
-                event.currentTarget.value = formatLegend(event.currentTarget.value);
-              }}
-              required
-            />
-          </label>
+          <LegendPicker name="opponentLegend" label="Leyenda rival" legends={legends}
+            initialValue={editingMatch?.opponent_legend} />
           <label>
             Tipo de mazo rival (opcional)
             <input name="opponentDeckType" defaultValue={editingMatch?.opponent_deck_type ?? ""} />

@@ -81,20 +81,32 @@ export function AuthPanel() {
   if (!client) return <p role="alert">{error}</p>;
 
   return (
-    <section className={session ? "auth-panel" : "auth-panel login-panel"} aria-labelledby="auth-title">
+    <section className={session ? "auth-panel" : "auth-panel login-panel"}
+      aria-labelledby={session ? undefined : "auth-title"}>
       {session ? (
-        <>
-          <div className="session-bar">
-            <div>
-              <h2 id="auth-title">Sesión iniciada</h2>
-              <p>{session.user.email}</p>
-            </div>
-            <button className="secondary-button" type="button" disabled={busy} onClick={signOut}>
-              {busy ? "Cerrando sesión…" : "Cerrar sesión"}
-            </button>
-          </div>
-          <MatchPanel key={session.user.id} client={client} userId={session.user.id} />
-        </>
+        <MatchPanel
+          key={session.user.id}
+          client={client}
+          userId={session.user.id}
+          accountMenu={
+            <details className="account-menu">
+              <summary aria-label="Cuenta">
+                <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <circle cx="12" cy="8" r="3.5" />
+                  <path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2" />
+                </svg>
+              </summary>
+              <div className="panel account-popover">
+                <p>{session.user.email}</p>
+                <button className="secondary-button" type="button" disabled={busy} onClick={signOut}>
+                  {busy ? "Cerrando sesión…" : "Cerrar sesión"}
+                </button>
+                {error && <p role="alert">{error}</p>}
+              </div>
+            </details>
+          }
+        />
       ) : (
         <>
           <h2 id="auth-title">Iniciar sesión</h2>
@@ -113,7 +125,7 @@ export function AuthPanel() {
           </form>
         </>
       )}
-      {error && <p role="alert">{error}</p>}
+      {!session && error && <p role="alert">{error}</p>}
     </section>
   );
 }
