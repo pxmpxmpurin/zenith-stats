@@ -26,8 +26,12 @@ function normalizeName(name: string) {
   return name.trim().toLowerCase();
 }
 
+function capitalizeInitial(value: string) {
+  return value.trim().replace(/^./u, (firstLetter) => firstLetter.toUpperCase());
+}
+
 function formatLegend(legend: string) {
-  return normalizeName(legend).replace(/^./u, (firstLetter) => firstLetter.toUpperCase());
+  return capitalizeInitial(legend.toLowerCase());
 }
 
 function catalogName(legends: Legend[], storedName: string) {
@@ -43,7 +47,7 @@ function catalogName(legends: Legend[], storedName: string) {
 
 function visibleDeckType(deck?: Pick<Deck, "deck_type">) {
   if (!deck || normalizeName(deck.deck_type) === normalizeName(unspecifiedDeckType)) return "";
-  return deck.deck_type;
+  return capitalizeInitial(deck.deck_type);
 }
 
 export function MatchPanel({ client, userId, accountMenu }: {
@@ -120,9 +124,9 @@ export function MatchPanel({ client, userId, accountMenu }: {
 
     const fields = new FormData(event.currentTarget);
     const opponentLegend = String(fields.get("opponentLegend") ?? "");
-    const opponentDeckType = String(fields.get("opponentDeckType") ?? "").trim();
+    const opponentDeckType = capitalizeInitial(String(fields.get("opponentDeckType") ?? ""));
     const legend = String(fields.get("legend") ?? "");
-    const deckType = String(fields.get("deckType") ?? "").trim() || unspecifiedDeckType;
+    const deckType = capitalizeInitial(String(fields.get("deckType") ?? "")) || unspecifiedDeckType;
     const dieRoll = fields.get("dieRoll");
     const result = fields.get("result");
 
@@ -260,7 +264,7 @@ export function MatchPanel({ client, userId, accountMenu }: {
                         {deck ? showLegend(deck.legend) : "Tu leyenda"}
                         {deckType && ` · ${deckType}`}
                         {" contra "}{showLegend(match.opponent_legend)}
-                        {match.opponent_deck_type && ` · ${match.opponent_deck_type}`}
+                        {match.opponent_deck_type && ` · ${capitalizeInitial(match.opponent_deck_type)}`}
                       </strong>
                       <div>
                         {match.won_match ? "Victoria" : "Derrota"} · {match.won_die_roll ? "Ganaste el dado" : "Perdiste el dado"}
@@ -431,13 +435,25 @@ function MatchForm({
           <LegendPicker name="legend" label="Tu leyenda" legends={legends} initialValue={initialLegend} />
           <label>
             Tu tipo de mazo (opcional)
-            <input name="deckType" defaultValue={visibleDeckType(editingDeck)} />
+            <input
+              name="deckType"
+              defaultValue={visibleDeckType(editingDeck)}
+              onBlur={(event) => {
+                event.currentTarget.value = capitalizeInitial(event.currentTarget.value);
+              }}
+            />
           </label>
           <LegendPicker name="opponentLegend" label="Leyenda rival" legends={legends}
             initialValue={editingMatch?.opponent_legend} />
           <label>
             Tipo de mazo rival (opcional)
-            <input name="opponentDeckType" defaultValue={editingMatch?.opponent_deck_type ?? ""} />
+            <input
+              name="opponentDeckType"
+              defaultValue={capitalizeInitial(editingMatch?.opponent_deck_type ?? "")}
+              onBlur={(event) => {
+                event.currentTarget.value = capitalizeInitial(event.currentTarget.value);
+              }}
+            />
           </label>
           <div className="match-outcomes">
             <fieldset>

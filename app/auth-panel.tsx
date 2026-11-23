@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { MatchPanel } from "./match-panel";
 
 const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,6 +13,19 @@ export function AuthPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const accountMenu = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function closeOnOutsidePress(event: PointerEvent) {
+      const menu = accountMenu.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePress, true);
+  }, []);
 
   useEffect(() => {
     if (!projectUrl || !publishableKey) return;
@@ -89,7 +102,17 @@ export function AuthPanel() {
           client={client}
           userId={session.user.id}
           accountMenu={
-            <details className="account-menu">
+            <details
+              ref={accountMenu}
+              className="account-menu"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && event.currentTarget.open) {
+                  event.preventDefault();
+                  event.currentTarget.open = false;
+                  event.currentTarget.querySelector("summary")?.focus();
+                }
+              }}
+            >
               <summary aria-label="Cuenta">
                 <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"
                   fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
