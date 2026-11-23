@@ -222,9 +222,18 @@ export function StatisticsPanel({
   );
   for (const match of matches ?? []) {
     if (expansion && matchExpansion(match.played_at, match.expansion_override) !== expansion) continue;
+    const passesDieFilter = filter === "all" || match.won_die_roll === (filter === "won");
+    const playerRecord = playerRecords.get(match.user_id);
+    if (passesDieFilter && playerRecord) {
+      playerRecord.total += 1;
+      playerRecord.wins += Number(match.won_match);
+    }
+
     const legend = showLegend(match.decks.legend);
-    const deckType = showDeckType(match.decks);
     const opponent = showLegend(match.opponent_legend);
+    if (players && legend === opponent) continue;
+
+    const deckType = showDeckType(match.decks);
     const key = JSON.stringify([legend, deckType.trim().toLowerCase()]);
     let row = rows.get(key);
     if (!row) {
@@ -233,12 +242,7 @@ export function StatisticsPanel({
     }
     opponents.add(opponent);
 
-    if (filter !== "all" && match.won_die_roll !== (filter === "won")) continue;
-    const playerRecord = playerRecords.get(match.user_id);
-    if (playerRecord) {
-      playerRecord.total += 1;
-      playerRecord.wins += Number(match.won_match);
-    }
+    if (!passesDieFilter) continue;
     row.total.total += 1;
     const record = row.cells.get(opponent) ?? { wins: 0, total: 0 };
     record.total += 1;
@@ -258,6 +262,9 @@ export function StatisticsPanel({
   const sortedRows = [...rows].sort(([, a], [, b]) =>
     a.legend.localeCompare(b.legend, "es") || a.deckType.localeCompare(b.deckType, "es"),
   );
+  const matrixEmptyMessage = players && matches?.length
+    ? "No hay enfrentamientos entre leyendas distintas para esta selección."
+    : expansion ? "No hay partidas de esta expansión." : emptyMessage;
 
   return (
     <section className={players ? "panel statistics-panel group-statistics" : "panel statistics-panel"}
@@ -296,9 +303,11 @@ export function StatisticsPanel({
               <h3 className="group-matrix-title">Matriz conjunta</h3>
             </>
           )}
-          {sortedRows.length === 0 ? <p>{expansion ? "No hay partidas de esta expansión." : emptyMessage}</p> : (
+          {sortedRows.length === 0 ? <p>{matrixEmptyMessage}</p> : (
             <>
-              <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>
+              <p className="matrix-key" id="matrix-key">
+                Porcentaje de victorias y victorias / partidas{players && " · Sin mirrors"}
+              </p>
               <div className="matrix-scroll" role="region" aria-label="Matriz de enfrentamientos"
                 aria-describedby="matrix-key" tabIndex={0}>
                 <table className="match-matrix">
