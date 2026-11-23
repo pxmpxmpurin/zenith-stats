@@ -339,6 +339,45 @@ main:has(> .login-panel) .page-header {
   gap: 0.5rem;
 }
 
+.dashboard-menu-toggle {
+  display: none;
+}
+
+@media (max-width: 44rem) {
+  .dashboard-nav {
+    position: relative;
+  }
+
+  .dashboard-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dashboard-views {
+    position: absolute;
+    z-index: 5;
+    inset-block-start: calc(100% + 0.5rem);
+    inset-inline-start: 0;
+    display: none;
+    min-inline-size: 12rem;
+    padding: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 0.55rem;
+    background: var(--panel);
+    box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 40%);
+  }
+
+  .dashboard-views[data-open="true"] {
+    display: grid;
+  }
+
+  .dashboard-views button {
+    inline-size: 100%;
+    text-align: start;
+  }
+}
+
 .account-menu {
   position: relative;
   flex: none;

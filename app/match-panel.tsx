@@ -24,6 +24,13 @@ const recentLimit = 50;
 const matchColumns = "id, deck_id, opponent_legend, opponent_deck_type, won_die_roll, won_match, played_at, expansion_override";
 const deckColumns = "id, legend, deck_type";
 const unspecifiedDeckType = "Sin especificar";
+const dashboardViews = {
+  matches: "Partidas",
+  statistics: "Estadísticas",
+  players: "Jugadores",
+  developer: "Desarrollo",
+};
+type DashboardView = keyof typeof dashboardViews;
 
 function updateRecentMatches(current: Match[], saved: Match) {
   return [saved, ...current.filter((match) => match.id !== saved.id)]
@@ -65,7 +72,8 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
   accountMenu: ReactNode;
   onUsernameChanged: (username: string) => void;
 }) {
-  const [view, setView] = useState<"matches" | "statistics" | "players" | "developer">("matches");
+  const [view, setView] = useState<DashboardView>("matches");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [developer, setDeveloper] = useState<{ is_owner: boolean } | null>(null);
   const [statisticsOpened, setStatisticsOpened] = useState(false);
@@ -82,9 +90,24 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
   const [notice, setNotice] = useState("");
   const editDialog = useRef<HTMLDialogElement>(null);
   const editHeading = useRef<HTMLHeadingElement>(null);
+  const dashboardNav = useRef<HTMLElement>(null);
+  const dashboardToggle = useRef<HTMLButtonElement>(null);
   const pendingMatch = useRef<{ id: string; fields: string } | null>(null);
   const saveInProgress = useRef(false);
   const editingDeck = decks.find((deck) => deck.id === editingMatch?.deck_id);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function closeOnOutsidePress(event: PointerEvent) {
+      if (event.target instanceof Node && !dashboardNav.current?.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePress, true);
+  }, [menuOpen]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -280,29 +303,59 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
     return catalogName(legends, name) || formatLegend(name);
   }
 
+  function selectView(nextView: DashboardView) {
+    if (nextView === "statistics") setStatisticsOpened(true);
+    setView(nextView);
+    if (menuOpen) {
+      setMenuOpen(false);
+      dashboardToggle.current?.focus();
+    }
+  }
+
   return (
     <div>
       <div className="dashboard-bar">
-        <nav className="dashboard-menu" aria-label="Vistas de Zenith Stats">
-          <button type="button" aria-pressed={view === "matches"} onClick={() => setView("matches")}>
-            Partidas
-          </button>
-          <button type="button" aria-pressed={view === "statistics"} onClick={() => {
-            setStatisticsOpened(true);
-            setView("statistics");
+        <nav className="dashboard-nav" ref={dashboardNav} aria-label="Vistas de Zenith Stats"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && menuOpen) {
+              event.preventDefault();
+              setMenuOpen(false);
+              dashboardToggle.current?.focus();
+            }
           }}>
-            Estadísticas
+          <button
+            ref={dashboardToggle}
+            className="secondary-button dashboard-menu-toggle"
+            type="button"
+            aria-label={`Menú principal, vista actual: ${dashboardViews[view]}`}
+            aria-controls="dashboard-views"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            {dashboardViews[view]}
           </button>
-          {isAdmin && (
-            <button type="button" aria-pressed={view === "players"} onClick={() => setView("players")}>
-              Jugadores
+          <div id="dashboard-views" className="dashboard-menu dashboard-views" data-open={menuOpen}>
+            <button type="button" aria-pressed={view === "matches"} onClick={() => selectView("matches")}>
+              Partidas
             </button>
-          )}
-          {developer && (
-            <button type="button" aria-pressed={view === "developer"} onClick={() => setView("developer")}>
-              Desarrollo
+            <button type="button" aria-pressed={view === "statistics"} onClick={() => selectView("statistics")}>
+              Estadísticas
             </button>
-          )}
+            {isAdmin && (
+              <button type="button" aria-pressed={view === "players"} onClick={() => selectView("players")}>
+                Jugadores
+              </button>
+            )}
+            {developer && (
+              <button type="button" aria-pressed={view === "developer"} onClick={() => selectView("developer")}>
+                Desarrollo
+              </button>
+            )}
+          </div>
         </nav>
         {accountMenu}
       </div>
