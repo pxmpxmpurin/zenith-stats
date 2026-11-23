@@ -188,34 +188,34 @@ export function StatisticsPanel({ client, userId, showLegend, showDeckType }: {
         <p>Registra una partida para ver tus enfrentamientos.</p>
       ) : (
         <>
-        <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>
-        <div className="matrix-scroll" role="region" aria-label="Matriz de enfrentamientos"
-          aria-describedby="matrix-key" tabIndex={0}>
-          <table className="match-matrix">
-            <thead>
-              <tr>
-                <th scope="col">Tu leyenda</th>
-                <th scope="col">Global</th>
-                {columns.map((opponent) => (
-                  <th key={opponent} scope="col">
-                    <LegendHeading legend={opponent} showTitle={(columnCounts.get(opponent.split(" · ")[0]) ?? 0) > 1} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map(([key, row]) => (
-                <tr key={key}>
-                  <th scope="row">
-                    <LegendHeading legend={row.legend} showTitle deckType={row.deckType} />
-                  </th>
-                  <RecordCell record={row.total} />
-                  {columns.map((opponent) => <RecordCell key={opponent} record={row.cells.get(opponent)} />)}
+          <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>
+          <div className="matrix-scroll" role="region" aria-label="Matriz de enfrentamientos"
+            aria-describedby="matrix-key" tabIndex={0}>
+            <table className="match-matrix">
+              <thead>
+                <tr>
+                  <th scope="col">Tu leyenda</th>
+                  <th scope="col">Global</th>
+                  {columns.map((opponent) => (
+                    <th key={opponent} scope="col">
+                      <LegendHeading legend={opponent} showTitle={(columnCounts.get(opponent.split(" · ")[0]) ?? 0) > 1} />
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sortedRows.map(([key, row]) => (
+                  <tr key={key}>
+                    <th scope="row">
+                      <LegendHeading legend={row.legend} showTitle deckType={row.deckType} />
+                    </th>
+                    <RecordCell record={row.total} />
+                    {columns.map((opponent) => <RecordCell key={opponent} record={row.cells.get(opponent)} />)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </section>
