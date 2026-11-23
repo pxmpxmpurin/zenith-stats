@@ -91,7 +91,7 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
           </>
         )}
         {!error && !players && <p role="status">Cargando jugadores…</p>}
-        {players?.length === 0 && <p>No hay jugadores registrados.</p>}
+        {players?.length === 0 && <p>No hay jugadores con el rol Zenith.</p>}
         {players && players.length > 0 && (
           <>
             <input type="search" aria-label="Buscar jugador" placeholder="Buscar jugador"

@@ -3,10 +3,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AdminPanel } from "./admin-panel";
+import { DeveloperPanel, type CatalogLegend } from "./developer-panel";
 import { StatisticsPanel } from "./statistics-panel";
 
 type Deck = { id: string; legend: string; deck_type: string };
-type Legend = { name: string; champion: string; title: string };
+type Legend = CatalogLegend;
 type Match = {
   id: string;
   deck_id: string;
@@ -51,13 +52,15 @@ function visibleDeckType(deck?: Pick<Deck, "deck_type">) {
   return capitalizeInitial(deck.deck_type);
 }
 
-export function MatchPanel({ client, userId, accountMenu }: {
+export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
   client: SupabaseClient;
   userId: string;
   accountMenu: ReactNode;
+  onUsernameChanged: (username: string) => void;
 }) {
-  const [view, setView] = useState<"matches" | "statistics" | "players">("matches");
+  const [view, setView] = useState<"matches" | "statistics" | "players" | "developer">("matches");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [developer, setDeveloper] = useState<{ is_owner: boolean } | null>(null);
   const [statisticsOpened, setStatisticsOpened] = useState(false);
   const [statisticsRevision, setStatisticsRevision] = useState(0);
   const [decks, setDecks] = useState<Deck[]>([]);
@@ -79,13 +82,19 @@ export function MatchPanel({ client, userId, accountMenu }: {
   useEffect(() => {
     const request = new AbortController();
 
-    async function checkAdmin() {
-      const { data, error } = await client.from("app_admins").select("user_id")
-        .eq("user_id", userId).abortSignal(request.signal).maybeSingle();
-      if (!request.signal.aborted) setIsAdmin(!error && data?.user_id === userId);
+    async function checkRoles() {
+      const [admin, developerRole] = await Promise.all([
+        client.from("app_admins").select("user_id").eq("user_id", userId)
+          .abortSignal(request.signal).maybeSingle(),
+        client.from("app_developers").select("is_owner").eq("user_id", userId)
+          .abortSignal(request.signal).maybeSingle(),
+      ]);
+      if (request.signal.aborted) return;
+      setIsAdmin(!admin.error && admin.data?.user_id === userId);
+      setDeveloper(developerRole.error ? null : developerRole.data);
     }
 
-    void checkAdmin();
+    void checkRoles();
     return () => request.abort();
   }, [client, userId]);
 
@@ -262,6 +271,11 @@ export function MatchPanel({ client, userId, accountMenu }: {
               Jugadores
             </button>
           )}
+          {developer && (
+            <button type="button" aria-pressed={view === "developer"} onClick={() => setView("developer")}>
+              Desarrollo
+            </button>
+          )}
         </nav>
         {accountMenu}
       </div>
@@ -355,6 +369,22 @@ export function MatchPanel({ client, userId, accountMenu }: {
       )}
       {!loading && !loadError && isAdmin && view === "players" && (
         <AdminPanel client={client} showLegend={showLegend} showDeckType={visibleDeckType} />
+      )}
+      {!loading && developer && view === "developer" && (
+        <DeveloperPanel
+          client={client}
+          isOwner={developer.is_owner}
+          onLegendsAdded={(added) => setLegends((current) => {
+            const byName = new Map([...current, ...added].map((legend) => [legend.name, legend]));
+            return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+          })}
+          onUsernameChanged={(target, username) => {
+            if (target === userId) onUsernameChanged(username);
+          }}
+          onRoleChanged={(target, role, enabled) => {
+            if (target === userId && role === "administrator") setIsAdmin(enabled);
+          }}
+        />
       )}
     </div>
   );

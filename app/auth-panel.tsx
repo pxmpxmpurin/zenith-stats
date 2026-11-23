@@ -15,7 +15,24 @@ export function AuthPanel() {
   const [error, setError] = useState("");
   const [registering, setRegistering] = useState(false);
   const [registeredUsername, setRegisteredUsername] = useState("");
+  const [loginName, setLoginName] = useState<{ userId: string; username: string } | null>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
+  const userId = session?.user.id;
+
+  useEffect(() => {
+    if (!userId || !client) return;
+    const request = new AbortController();
+
+    async function loadLoginName() {
+      if (!client) return;
+      const { data } = await client.from("login_usernames").select("username")
+        .eq("user_id", userId).abortSignal(request.signal).maybeSingle();
+      if (!request.signal.aborted && data && userId) setLoginName({ userId, username: data.username });
+    }
+
+    void loadLoginName();
+    return () => request.abort();
+  }, [userId]);
 
   useEffect(() => {
     function closeOnOutsidePress(event: PointerEvent) {
@@ -39,6 +56,7 @@ export function AuthPanel() {
           if (event === "SIGNED_OUT") {
             setRegistering(false);
             setRegisteredUsername("");
+            setLoginName(null);
             setError("");
           }
           setSession(nextSession);
@@ -169,6 +187,7 @@ export function AuthPanel() {
           key={session.user.id}
           client={client}
           userId={session.user.id}
+          onUsernameChanged={(username) => setLoginName({ userId: session.user.id, username })}
           accountMenu={
             <details
               ref={accountMenu}
@@ -189,7 +208,8 @@ export function AuthPanel() {
                 </svg>
               </summary>
               <div className="panel account-popover">
-                <p>{session.user.app_metadata.zenith_username ?? session.user.email}</p>
+                <p>{loginName?.userId === session.user.id ? loginName.username
+                  : session.user.app_metadata.zenith_username ?? session.user.email}</p>
                 <button className="secondary-button" type="button" disabled={busy} onClick={signOut}>
                   {busy ? "Cerrando sesión…" : "Cerrar sesión"}
                 </button>

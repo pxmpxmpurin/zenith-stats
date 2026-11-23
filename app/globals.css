@@ -402,6 +402,44 @@ main:has(> .login-panel) .page-header {
   margin-block-start: 1rem;
 }
 
+.developer-panel {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+}
+
+@media (min-width: 58rem) {
+  .developer-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.developer-panel textarea,
+.developer-panel select {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  border: 1px solid #71768e;
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.8rem;
+  background: #121520;
+  color: inherit;
+  font: inherit;
+}
+
+.developer-panel textarea {
+  resize: vertical;
+}
+
+.developer-username,
+.developer-roles {
+  margin-block-start: 1rem;
+}
+
+.developer-roles {
+  align-items: center;
+}
+
 .matrix-scroll {
   max-block-size: min(64vh, 42rem);
   overflow: auto;
