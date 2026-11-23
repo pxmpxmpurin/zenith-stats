@@ -51,19 +51,39 @@ export function AuthPanel() {
     if (!client || busy) return;
 
     const fields = new FormData(event.currentTarget);
+    const identifier = String(fields.get("identifier") ?? "").trim();
+    const password = String(fields.get("password") ?? "");
     setBusy(true);
     setError("");
 
     try {
-      const { error: authError } = await client.auth.signInWithPassword({
-        email: String(fields.get("email")).trim(),
-        password: String(fields.get("password")),
-      });
-      if (authError) {
-        setError(authError.code === "invalid_credentials"
-          ? "El correo o la contraseña son incorrectos."
-          : "No se pudo iniciar sesión. Inténtalo de nuevo.");
+      if (identifier.includes("@")) {
+        const { error: authError } = await client.auth.signInWithPassword({ email: identifier, password });
+        if (authError) {
+          setError(authError.code === "invalid_credentials"
+            ? "El usuario o la contraseña son incorrectos."
+            : "No se pudo iniciar sesión. Inténtalo de nuevo.");
+        }
+        return;
       }
+
+      const response = await fetch("/api/auth/username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: identifier, password }),
+      });
+      if (!response.ok) {
+        if (response.status === 400 || response.status === 401) {
+          setError("El usuario o la contraseña son incorrectos.");
+        } else if (response.status === 429) {
+          setError("Demasiados intentos. Espera un momento antes de volver a probar.");
+        } else {
+          setError("El acceso con nombre de usuario no está disponible. Puedes entrar con tu correo.");
+        }
+        return;
+      }
+      const { error: sessionError } = await client.auth.setSession(await response.json());
+      if (sessionError) setError("No se pudo iniciar sesión. Inténtalo de nuevo.");
     } catch {
       setError("No se pudo conectar con Supabase. Inténtalo de nuevo.");
     } finally {
@@ -135,8 +155,9 @@ export function AuthPanel() {
           <h2 id="auth-title">Iniciar sesión</h2>
           <form onSubmit={signIn}>
             <label>
-              Correo electrónico
-              <input name="email" type="email" autoComplete="username" required />
+              Usuario o correo electrónico
+              <input name="identifier" type="text" autoComplete="username"
+                autoCapitalize="none" spellCheck={false} required />
             </label>
             <label>
               Contraseña

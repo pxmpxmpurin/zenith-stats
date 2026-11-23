@@ -344,6 +344,51 @@ p {
   font: inherit;
 }
 
+.admin-panel {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+}
+
+@media (min-width: 48rem) {
+  .admin-panel {
+    grid-template-columns: minmax(13rem, 1fr) minmax(0, 2fr);
+  }
+}
+
+.player-list {
+  display: grid;
+  gap: 0.4rem;
+  max-block-size: clamp(9rem, 28vh, 16rem);
+  margin: 0.75rem 0 0;
+  padding: 0.25rem;
+  overflow: auto;
+  list-style: none;
+}
+
+.player-list button {
+  inline-size: 100%;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.player-list button[aria-pressed="true"] {
+  background: #c9d0ff;
+  color: #14151d;
+}
+
+.player-history h2 {
+  overflow-wrap: anywhere;
+}
+
+.admin-history li {
+  display: block;
+}
+
+.admin-pagination {
+  margin-block-start: 1rem;
+}
+
 .matrix-scroll {
   max-block-size: min(64vh, 42rem);
   overflow: auto;

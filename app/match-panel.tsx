@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AdminPanel } from "./admin-panel";
 import { StatisticsPanel } from "./statistics-panel";
 
 type Deck = { id: string; legend: string; deck_type: string };
@@ -55,7 +56,10 @@ export function MatchPanel({ client, userId, accountMenu }: {
   userId: string;
   accountMenu: ReactNode;
 }) {
-  const [view, setView] = useState<"matches" | "statistics">("matches");
+  const [view, setView] = useState<"matches" | "statistics" | "players">("matches");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [statisticsOpened, setStatisticsOpened] = useState(false);
+  const [statisticsRevision, setStatisticsRevision] = useState(0);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [legends, setLegends] = useState<Legend[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -71,6 +75,19 @@ export function MatchPanel({ client, userId, accountMenu }: {
   const pendingMatch = useRef<{ id: string; fields: string } | null>(null);
   const saveInProgress = useRef(false);
   const editingDeck = decks.find((deck) => deck.id === editingMatch?.deck_id);
+
+  useEffect(() => {
+    const request = new AbortController();
+
+    async function checkAdmin() {
+      const { data, error } = await client.from("app_admins").select("user_id")
+        .eq("user_id", userId).abortSignal(request.signal).maybeSingle();
+      if (!request.signal.aborted) setIsAdmin(!error && data?.user_id === userId);
+    }
+
+    void checkAdmin();
+    return () => request.abort();
+  }, [client, userId]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -185,6 +202,7 @@ export function MatchPanel({ client, userId, accountMenu }: {
           .select(matchColumns).single();
         if (updateError) throw updateError;
         setMatches((current) => current.map((item) => item.id === updatedMatch.id ? updatedMatch : item));
+        setStatisticsRevision((revision) => revision + 1);
         editMatch(null);
         setNotice("Cambios guardados.");
         return;
@@ -211,6 +229,7 @@ export function MatchPanel({ client, userId, accountMenu }: {
 
       pendingMatch.current = null;
       setMatches((current) => [savedMatch, ...current].slice(0, recentLimit));
+      setStatisticsRevision((revision) => revision + 1);
       setEntry((current) => ({ version: current.version + 1, legend }));
       setNotice("Partida guardada.");
     } catch {
@@ -232,9 +251,17 @@ export function MatchPanel({ client, userId, accountMenu }: {
           <button type="button" aria-pressed={view === "matches"} onClick={() => setView("matches")}>
             Partidas
           </button>
-          <button type="button" aria-pressed={view === "statistics"} onClick={() => setView("statistics")}>
+          <button type="button" aria-pressed={view === "statistics"} onClick={() => {
+            setStatisticsOpened(true);
+            setView("statistics");
+          }}>
             Estadísticas
           </button>
+          {isAdmin && (
+            <button type="button" aria-pressed={view === "players"} onClick={() => setView("players")}>
+              Jugadores
+            </button>
+          )}
         </nav>
         {accountMenu}
       </div>
@@ -316,13 +343,18 @@ export function MatchPanel({ client, userId, accountMenu }: {
           )}
         </dialog>
       </div>
-      {!loading && !loadError && view === "statistics" && (
+      {!loading && !loadError && statisticsOpened && (
         <StatisticsPanel
           client={client}
           userId={userId}
+          hidden={view !== "statistics"}
+          revision={statisticsRevision}
           showLegend={showLegend}
           showDeckType={visibleDeckType}
         />
+      )}
+      {!loading && !loadError && isAdmin && view === "players" && (
+        <AdminPanel client={client} showLegend={showLegend} showDeckType={visibleDeckType} />
       )}
     </div>
   );

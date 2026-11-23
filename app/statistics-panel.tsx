@@ -79,9 +79,11 @@ function RecordCell({ record }: { record?: MatchRecord }) {
   );
 }
 
-export function StatisticsPanel({ client, userId, showLegend, showDeckType }: {
+export function StatisticsPanel({ client, userId, hidden, revision, showLegend, showDeckType }: {
   client: SupabaseClient;
   userId: string;
+  hidden: boolean;
+  revision: number;
   showLegend: (name: string) => string;
   showDeckType: (deck: Deck) => string;
 }) {
@@ -96,22 +98,30 @@ export function StatisticsPanel({ client, userId, showLegend, showDeckType }: {
     async function loadMatches() {
       const history: StatisticsMatch[] = [];
       let lastId: string | undefined;
+      let total: number | null = null;
 
       try {
         while (!request.signal.aborted) {
           const query = client.from("matches")
-            .select("id, opponent_legend, won_die_roll, won_match, decks!inner(legend, deck_type)")
+            .select(
+              "id, opponent_legend, won_die_roll, won_match, decks!inner(legend, deck_type)",
+              lastId ? undefined : { count: "exact" },
+            )
             .eq("user_id", userId).order("id").limit(500);
           if (lastId) query.gt("id", lastId);
 
-          const { data, error: queryError } = await query.abortSignal(request.signal)
+          const { data, count, error: queryError } = await query.abortSignal(request.signal)
             .overrideTypes<StatisticsMatch[], { merge: false }>();
           if (queryError) throw queryError;
-          if (data.length === 0) {
-            if (!request.signal.aborted) setMatches(history);
+          if (count !== null) total = count;
+          history.push(...data);
+          if (data.length === 0 || (total !== null && history.length >= total)) {
+            if (!request.signal.aborted) {
+              setMatches(history);
+              setError(false);
+            }
             return;
           }
-          history.push(...data);
           lastId = data[data.length - 1].id;
         }
       } catch {
@@ -121,7 +131,9 @@ export function StatisticsPanel({ client, userId, showLegend, showDeckType }: {
 
     void loadMatches();
     return () => request.abort();
-  }, [client, userId, attempt]);
+  }, [client, userId, revision, attempt]);
+
+  if (hidden) return null;
 
   const rows = new Map<string, MatrixRow>();
   const opponents = new Set<string>();
@@ -164,14 +176,11 @@ export function StatisticsPanel({ client, userId, showLegend, showDeckType }: {
       <div className="statistics-heading">
         <h2 id="statistics-title">Matriz de enfrentamientos</h2>
         {matches && matches.length > 0 && (
-          <label>
-            Tirada de dado
-            <select value={filter} onChange={(event) => setFilter(event.target.value as DieFilter)}>
-              <option value="all">Todas las partidas</option>
-              <option value="won">Gané el dado</option>
-              <option value="lost">Perdí el dado</option>
-            </select>
-          </label>
+          <select aria-label="Filtro de dado" value={filter} onChange={(event) => setFilter(event.target.value as DieFilter)}>
+            <option value="all">Dado · Todas</option>
+            <option value="won">Dado · Ganado</option>
+            <option value="lost">Dado · Perdido</option>
+          </select>
         )}
       </div>
       {error ? (
