@@ -13,6 +13,8 @@ export function AuthPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [registering, setRegistering] = useState(false);
+  const [registeredUsername, setRegisteredUsername] = useState("");
   const accountMenu = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
@@ -33,7 +35,12 @@ export function AuthPanel() {
     try {
       client ??= createClient(projectUrl, publishableKey);
       const { data: { subscription } } = client.auth.onAuthStateChange(
-        (_event, nextSession) => {
+        (event, nextSession) => {
+          if (event === "SIGNED_OUT") {
+            setRegistering(false);
+            setRegisteredUsername("");
+            setError("");
+          }
           setSession(nextSession);
           setLoading(false);
         },
@@ -91,6 +98,47 @@ export function AuthPanel() {
     }
   }
 
+  async function register(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+
+    const fields = new FormData(event.currentTarget);
+    const username = String(fields.get("identifier") ?? "").trim().toLowerCase();
+    const password = String(fields.get("password") ?? "");
+    setBusy(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        if (response.status === 409) {
+          setError("Ese usuario ya está en uso.");
+        } else if (response.status === 429) {
+          setError("Demasiados intentos. Espera unos minutos antes de volver a probar.");
+        } else if (result?.code === "invalid_username") {
+          setError("Revisa el formato del nombre de usuario.");
+        } else if (result?.code === "invalid_password") {
+          setError("Usa una contraseña de al menos 8 caracteres. Prueba con una combinación de letras, números y símbolos.");
+        } else {
+          setError("El registro no está disponible en este momento. Inténtalo de nuevo.");
+        }
+        return;
+      }
+
+      setRegisteredUsername(username);
+      setRegistering(false);
+    } catch {
+      setError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signOut() {
     if (!client || busy) return;
     setBusy(true);
@@ -141,7 +189,7 @@ export function AuthPanel() {
                 </svg>
               </summary>
               <div className="panel account-popover">
-                <p>{session.user.email}</p>
+                <p>{session.user.app_metadata.zenith_username ?? session.user.email}</p>
                 <button className="secondary-button" type="button" disabled={busy} onClick={signOut}>
                   {busy ? "Cerrando sesión…" : "Cerrar sesión"}
                 </button>
@@ -152,20 +200,48 @@ export function AuthPanel() {
         />
       ) : (
         <>
-          <h2 id="auth-title">Iniciar sesión</h2>
-          <form onSubmit={signIn}>
+          <h2 id="auth-title">{registering ? "Crear cuenta" : "Iniciar sesión"}</h2>
+          {!registering && registeredUsername && <p role="status">Cuenta creada. Entra con tu usuario y contraseña.</p>}
+          <form key={registering ? "register" : "sign-in"} method="post" onSubmit={registering ? register : signIn}>
             <label>
-              Usuario o correo electrónico
-              <input name="identifier" type="text" autoComplete="username"
-                autoCapitalize="none" spellCheck={false} required />
+              {registering ? "Nombre de usuario" : "Usuario o correo electrónico"}
+              <input
+                name="identifier"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                defaultValue={registering ? "" : registeredUsername}
+                minLength={registering ? 3 : undefined}
+                maxLength={registering ? 30 : undefined}
+                aria-describedby={registering ? "username-rules" : undefined}
+                required
+              />
+              {registering && (
+                <small id="username-rules">De 3 a 30 caracteres. Empieza con una letra sin tilde o un número. También puedes usar puntos, guiones y guiones bajos.</small>
+              )}
             </label>
             <label>
               Contraseña
-              <input name="password" type="password" autoComplete="current-password" required />
+              <input name="password" type="password"
+                autoComplete={registering ? "new-password" : "current-password"}
+                minLength={registering ? 8 : undefined}
+                maxLength={registering ? 72 : undefined}
+                required />
+              {registering && <small>Mínimo 8 caracteres.</small>}
             </label>
-            <button type="submit" disabled={busy}>
-              {busy ? "Entrando…" : "Entrar"}
-            </button>
+            <div className="match-actions">
+              <button type="submit" disabled={busy}>
+                {registering ? (busy ? "Creando cuenta…" : "Crear cuenta") : (busy ? "Entrando…" : "Entrar")}
+              </button>
+              <button type="button" className="secondary-button" disabled={busy} onClick={() => {
+                setError("");
+                setRegisteredUsername("");
+                setRegistering(!registering);
+              }}>
+                {registering ? "Volver a iniciar sesión" : "Crear una cuenta"}
+              </button>
+            </div>
           </form>
         </>
       )}

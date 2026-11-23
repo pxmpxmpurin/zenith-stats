@@ -50,7 +50,20 @@ p {
 }
 
 .login-panel {
+  inline-size: 100%;
   max-width: 27rem;
+  margin-inline: auto;
+}
+
+main:has(> .login-panel) {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-block-size: 100svh;
+}
+
+main:has(> .login-panel) .page-header {
+  text-align: center;
 }
 
 .auth-panel form,
