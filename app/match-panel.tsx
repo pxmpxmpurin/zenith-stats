@@ -20,7 +20,7 @@ type Match = {
   expansion_override: string | null;
 };
 
-const recentLimit = 50;
+const matchPageSize = 50;
 const matchColumns = "id, deck_id, opponent_legend, opponent_deck_type, won_die_roll, won_match, played_at, expansion_override";
 const deckColumns = "id, legend, deck_type";
 const unspecifiedDeckType = "Sin especificar";
@@ -32,10 +32,26 @@ const dashboardViews = {
 };
 type DashboardView = keyof typeof dashboardViews;
 
-function updateRecentMatches(current: Match[], saved: Match) {
-  return [saved, ...current.filter((match) => match.id !== saved.id)]
-    .sort((a, b) => Date.parse(b.played_at) - Date.parse(a.played_at) || a.id.localeCompare(b.id))
-    .slice(0, recentLimit);
+function compareMatches(a: Match, b: Match) {
+  return Date.parse(b.played_at) - Date.parse(a.played_at)
+    || b.played_at.localeCompare(a.played_at)
+    || a.id.localeCompare(b.id);
+}
+
+function updateVisibleMatch(current: Match[], saved: Match, hasMore: boolean) {
+  const remaining = current.filter((match) => match.id !== saved.id);
+  const lastVisible = current.at(-1);
+  if (hasMore && (!lastVisible || compareMatches(saved, lastVisible) > 0)) return remaining;
+  return [...remaining, saved].sort(compareMatches);
+}
+
+function matchPageQuery(client: SupabaseClient, userId: string, after?: Match) {
+  const query = client.from("matches").select(matchColumns).eq("user_id", userId)
+    .order("played_at", { ascending: false }).order("id").limit(matchPageSize + 1);
+  if (after) {
+    query.or(`played_at.lt.${after.played_at},and(played_at.eq.${after.played_at},id.gt.${after.id})`);
+  }
+  return query;
 }
 
 function normalizeName(name: string) {
@@ -81,14 +97,21 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [legends, setLegends] = useState<Legend[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [hasMoreMatches, setHasMoreMatches] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [entry, setEntry] = useState({ version: 0, legend: "" });
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const editDialog = useRef<HTMLDialogElement>(null);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
   const editHeading = useRef<HTMLHeadingElement>(null);
   const dashboardNav = useRef<HTMLElement>(null);
   const dashboardToggle = useRef<HTMLButtonElement>(null);
@@ -136,16 +159,15 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
         const [deckResult, matchResult, legendResult] = await Promise.all([
           client.from("decks").select(deckColumns).eq("user_id", userId)
             .order("legend").order("deck_type").abortSignal(request.signal),
-          client.from("matches").select(matchColumns).eq("user_id", userId)
-            .order("played_at", { ascending: false }).order("id")
-            .limit(recentLimit).abortSignal(request.signal),
+          matchPageQuery(client, userId).abortSignal(request.signal),
           client.from("legends").select("name, champion, title")
             .order("champion").order("title").abortSignal(request.signal),
         ]);
         if (request.signal.aborted) return;
         if (deckResult.error || matchResult.error || legendResult.error) throw new Error("No se pudieron cargar los datos.");
         setDecks(deckResult.data);
-        setMatches(matchResult.data);
+        setMatches(matchResult.data.slice(0, matchPageSize));
+        setHasMoreMatches(matchResult.data.length > matchPageSize);
         setLegends(legendResult.data);
       } catch {
         if (!request.signal.aborted) setLoadError(true);
@@ -168,10 +190,66 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
     }
   }, [editingMatch]);
 
+  useEffect(() => {
+    const dialog = deleteDialog.current;
+    if (matchToDelete && dialog && !dialog.open) dialog.showModal();
+    if (!matchToDelete && dialog?.open) dialog.close();
+  }, [matchToDelete]);
+
   function editMatch(match: Match | null) {
     setEditingMatch(match);
     setError("");
     setNotice("");
+  }
+
+  async function loadMoreMatches() {
+    if (!hasMoreMatches || saveInProgress.current) return;
+    saveInProgress.current = true;
+    setLoadingMore(true);
+    setLoadMoreError(false);
+
+    try {
+      const { data, error } = await matchPageQuery(client, userId, matches.at(-1));
+      if (error) throw error;
+
+      const nextPage = data.slice(0, matchPageSize);
+      setMatches((current) => {
+        const byId = new Map([...current, ...nextPage].map((match) => [match.id, match]));
+        return [...byId.values()].sort(compareMatches);
+      });
+      setHasMoreMatches(data.length > matchPageSize);
+    } catch {
+      setLoadMoreError(true);
+    } finally {
+      saveInProgress.current = false;
+      setLoadingMore(false);
+    }
+  }
+
+  async function deleteMatch() {
+    if (!matchToDelete || saveInProgress.current) return;
+    saveInProgress.current = true;
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const { data, error } = await client.from("matches").delete()
+        .eq("user_id", userId).eq("id", matchToDelete.id).select("id").maybeSingle();
+      if (error || !data) {
+        setDeleteError("No se pudo borrar la partida. Inténtalo de nuevo.");
+        return;
+      }
+
+      setMatches((current) => current.filter((match) => match.id !== data.id));
+      setStatisticsRevision((revision) => revision + 1);
+      setMatchToDelete(null);
+      setNotice("Partida borrada.");
+    } catch {
+      setDeleteError("No se pudo borrar la partida. Inténtalo de nuevo.");
+    } finally {
+      saveInProgress.current = false;
+      setDeleting(false);
+    }
   }
 
   async function saveMatch(event: FormEvent<HTMLFormElement>, editingMatch: Match | null) {
@@ -255,12 +333,7 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
           .update(match).eq("user_id", userId).eq("id", editingMatch.id)
           .select(matchColumns).single();
         if (updateError) throw updateError;
-        setMatches((current) => updateRecentMatches(current, updatedMatch));
-        if (dateChanged) {
-          const { data } = await client.from("matches").select(matchColumns).eq("user_id", userId)
-            .order("played_at", { ascending: false }).order("id").limit(recentLimit);
-          if (data) setMatches(data);
-        }
+        setMatches((current) => updateVisibleMatch(current, updatedMatch, hasMoreMatches));
         setStatisticsRevision((revision) => revision + 1);
         editMatch(null);
         setNotice("Cambios guardados.");
@@ -287,7 +360,7 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
       if (!savedMatch) throw new Error("No se pudo confirmar la partida.");
 
       pendingMatch.current = null;
-      setMatches((current) => updateRecentMatches(current, savedMatch));
+      setMatches((current) => updateVisibleMatch(current, savedMatch, hasMoreMatches));
       setStatisticsRevision((revision) => revision + 1);
       setEntry((current) => ({ version: current.version + 1, legend }));
       setNotice("Partida guardada.");
@@ -365,14 +438,15 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
         <section className="panel match-entry" aria-labelledby="match-entry-title">
           <h2 id="match-entry-title">Registrar partida</h2>
           <MatchForm key={entry.version} legends={legends} initialLegend={entry.legend}
-            saving={saving} error={editingMatch ? "" : error}
+            saving={saving} disabled={loadingMore} error={editingMatch ? "" : error}
             onSave={(event) => void saveMatch(event, null)} />
           <p role="status" hidden={notice !== "Partida guardada."}>{notice}</p>
         </section>
 
         <section className="panel match-history" aria-labelledby="match-history-title">
-          <h2 id="match-history-title">Mis partidas recientes</h2>
-          {matches.length === 0 ? <p>Aún no has registrado partidas.</p> : (
+          <h2 id="match-history-title">Mis partidas</h2>
+          {matches.length === 0 && !hasMoreMatches && <p>Aún no has registrado partidas.</p>}
+          {matches.length > 0 && (
             <ul className="match-list">
               {matches.map((match) => {
                 const deck = decks.find((item) => item.id === match.deck_id);
@@ -396,24 +470,54 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
                         {expansion && <span>{expansion}</span>}
                       </div>
                     </div>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={saving}
-                      aria-haspopup="dialog"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        editMatch(match);
-                      }}
-                    >
-                      Editar
-                    </button>
+                    <div className="match-row-actions">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={saving || deleting || loadingMore}
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          editMatch(match);
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="secondary-button match-delete-button"
+                        type="button"
+                        disabled={saving || deleting || loadingMore}
+                        aria-label={`Borrar partida contra ${showLegend(match.opponent_legend)}`}
+                        title="Borrar partida"
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          setNotice("");
+                          setDeleteError("");
+                          setMatchToDelete(match);
+                        }}
+                      >
+                        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                        </svg>
+                      </button>
+                    </div>
                   </li>
                 );
               })}
             </ul>
           )}
-          <p role="status" hidden={notice !== "Cambios guardados."}>{notice}</p>
+          {hasMoreMatches && (
+            <div className="match-history-more">
+              <button type="button" className="secondary-button" disabled={loadingMore || saving || deleting}
+                onClick={() => void loadMoreMatches()}>
+                {loadingMore ? "Cargando…" : "Cargar más"}
+              </button>
+              {loadMoreError && <p role="alert">No se pudieron cargar más partidas. Inténtalo de nuevo.</p>}
+            </div>
+          )}
+          <p role="status" hidden={notice !== "Cambios guardados." && notice !== "Partida borrada."}>{notice}</p>
         </section>
 
         <dialog
@@ -438,6 +542,35 @@ export function MatchPanel({ client, userId, accountMenu, onUsernameChanged }: {
               onSave={(event) => void saveMatch(event, editingMatch)}
               onCancel={() => editMatch(null)}
             />
+          )}
+        </dialog>
+        <dialog
+          ref={deleteDialog}
+          className="panel match-dialog match-delete-dialog"
+          aria-labelledby="match-delete-title"
+          aria-describedby="match-delete-description"
+          onCancel={(event) => {
+            event.preventDefault();
+            if (!saveInProgress.current) setMatchToDelete(null);
+          }}
+        >
+          {matchToDelete && (
+            <>
+              <h2 id="match-delete-title">¿Borrar partida?</h2>
+              <p id="match-delete-description">
+                Se borrará la partida contra <strong>{showLegend(matchToDelete.opponent_legend)}</strong> del{" "}
+                {formatMatchDate(matchToDelete.played_at)}.
+              </p>
+              <div className="match-actions">
+                <button type="button" className="secondary-button" disabled={deleting}
+                  onClick={() => setMatchToDelete(null)} autoFocus>Cancelar</button>
+                <button type="button" className="match-delete-confirm" disabled={deleting}
+                  onClick={() => void deleteMatch()}>
+                  {deleting ? "Borrando…" : "Borrar partida"}
+                </button>
+              </div>
+              {deleteError && <p role="alert">{deleteError}</p>}
+            </>
           )}
         </dialog>
       </div>
@@ -563,13 +696,14 @@ function LegendPicker({ name, label, legends, initialValue = "" }: {
 }
 
 function MatchForm({
-  legends, initialLegend = "", editingMatch, editingDeck, saving, error, onSave, onCancel,
+  legends, initialLegend = "", editingMatch, editingDeck, saving, disabled, error, onSave, onCancel,
 }: {
   legends: Legend[];
   initialLegend?: string;
   editingMatch?: Match;
   editingDeck?: Deck;
   saving: boolean;
+  disabled?: boolean;
   error: string;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onCancel?: () => void;
@@ -580,7 +714,7 @@ function MatchForm({
   return (
     <>
       <form onSubmit={onSave}>
-        <fieldset disabled={saving}>
+        <fieldset disabled={saving || disabled}>
           <LegendPicker name="legend" label="Tu leyenda" legends={legends} initialValue={initialLegend} />
           <label>
             Tu tipo de mazo (opcional)

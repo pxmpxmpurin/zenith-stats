@@ -287,6 +287,10 @@ main:has(> .login-panel) .page-header {
   padding-block-end: 0;
 }
 
+.match-history-more {
+  margin-block-start: 1rem;
+}
+
 .match-summary {
   display: grid;
   gap: 0.25rem;
@@ -313,12 +317,36 @@ main:has(> .login-panel) .page-header {
   gap: 0.5rem;
 }
 
+.match-row-actions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.auth-panel .match-delete-button {
+  display: grid;
+  inline-size: 2.75rem;
+  place-items: center;
+  padding: 0;
+  color: #ffc1cb;
+}
+
+.auth-panel .match-delete-button:not(:disabled):hover,
+.auth-panel .match-delete-confirm {
+  border-color: #b86a76;
+  background: #532532;
+  color: #ffe2e7;
+}
+
 .match-dialog {
   inline-size: min(34rem, calc(100% - 2rem));
   max-block-size: calc(100dvh - 2rem);
   color: inherit;
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+.match-delete-dialog {
+  inline-size: min(27rem, calc(100% - 2rem));
 }
 
 .match-dialog::backdrop {
