@@ -1,11 +1,32 @@
+:root {
+  color-scheme: dark;
+  --background: #0a151c;
+  --panel: #12232b;
+  --surface: #1b353c;
+  --surface-hover: #254a4e;
+  --field: #0d1d24;
+  --border: #355456;
+  --control-border: #628784;
+  --text: #f0eee3;
+  --muted: #afc4c0;
+  --accent: #8fe0c9;
+  --accent-text: #082421;
+  --zenith-gold: #f5d98b;
+  --zenith-brown: #ae7142;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
+  min-block-size: 100svh;
   margin: 0;
-  color: #f5f6fb;
-  background: #11131c;
+  color: var(--text);
+  background: var(--background);
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgb(30 107 106 / 28%), transparent 38rem),
+    radial-gradient(ellipse at 95% 0%, rgb(140 86 45 / 16%), transparent 30rem);
   font-family: system-ui, sans-serif;
   line-height: 1.5;
 }
@@ -22,6 +43,25 @@ h1 {
   line-height: 1.05;
 }
 
+.brand-zenith {
+  color: var(--zenith-gold);
+}
+
+@supports (background-clip: text) {
+  .brand-zenith {
+    background: linear-gradient(160deg, #fff0be 0%, var(--zenith-gold) 42%, var(--zenith-brown) 88%);
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@media (forced-colors: active) {
+  .brand-zenith {
+    background: none;
+    color: CanvasText;
+  }
+}
+
 h2 {
   margin: 0 0 1rem;
   font-size: 1.25rem;
@@ -29,7 +69,7 @@ h2 {
 }
 
 p {
-  color: #c1c3d1;
+  color: var(--muted);
 }
 
 .page-header p {
@@ -44,9 +84,9 @@ p {
 .login-panel {
   min-inline-size: 0;
   padding: clamp(1rem, 3vw, 1.5rem);
-  border: 1px solid #383c50;
+  border: 1px solid var(--border);
   border-radius: 0.875rem;
-  background: #191c29;
+  background: var(--panel);
 }
 
 .login-panel {
@@ -79,7 +119,7 @@ main:has(> .login-panel) .page-header {
 .auth-panel input:not([type="radio"]),
 .auth-panel button {
   min-block-size: 2.75rem;
-  border: 1px solid #71768e;
+  border: 1px solid var(--control-border);
   border-radius: 0.55rem;
   padding: 0.5rem 0.8rem;
   font: inherit;
@@ -88,21 +128,21 @@ main:has(> .login-panel) .page-header {
 .auth-panel input:not([type="radio"]) {
   inline-size: 100%;
   min-inline-size: 0;
-  background: #121520;
+  background: var(--field);
   color: inherit;
 }
 
 .auth-panel button {
   justify-self: start;
-  background: #c9d0ff;
-  color: #14151d;
+  background: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   cursor: pointer;
 }
 
 .auth-panel .secondary-button {
-  background: #24283a;
-  color: #eef0ff;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .auth-panel button:disabled {
@@ -111,7 +151,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .auth-panel :focus-visible {
-  outline: 2px solid #c9d0ff;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -171,19 +211,19 @@ main:has(> .login-panel) .page-header {
   min-inline-size: 4rem;
   min-block-size: 2.75rem;
   place-items: center;
-  border: 1px solid #7f8299;
+  border: 1px solid var(--control-border);
   border-radius: 0.4rem;
-  background: #202230;
+  background: var(--surface);
   font-size: 1.4rem;
 }
 
 .result-options input:checked + span {
-  background: #c9d0ff;
-  color: #14151d;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .result-options input:focus-visible + span {
-  outline: 2px solid #c9d0ff;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -194,9 +234,9 @@ main:has(> .login-panel) .page-header {
   top: 100%;
   margin: 0.25rem 0 0;
   padding: 0.25rem;
-  border: 1px solid #7f8299;
+  border: 1px solid var(--control-border);
   border-radius: 0.4rem;
-  background: #202230;
+  background: var(--surface);
   list-style: none;
 }
 
@@ -211,12 +251,12 @@ main:has(> .login-panel) .page-header {
 
 .legend-suggestions button:hover,
 .legend-suggestions button:focus-visible {
-  background: #34374a;
+  background: var(--surface-hover);
 }
 
 .legend-empty {
   padding: 0.5rem 0.8rem;
-  color: #c1c3d1;
+  color: var(--muted);
 }
 
 .match-list {
@@ -230,7 +270,7 @@ main:has(> .login-panel) .page-header {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 0.75rem;
-  border-top: 1px solid #383c50;
+  border-top: 1px solid var(--border);
   padding-block: 0.875rem;
   overflow-wrap: anywhere;
 }
@@ -245,7 +285,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .match-summary time {
-  color: #c1c3d1;
+  color: var(--muted);
 }
 
 .match-actions {
@@ -263,7 +303,7 @@ main:has(> .login-panel) .page-header {
 }
 
 .match-dialog::backdrop {
-  background: rgb(10 12 19 / 75%);
+  background: rgb(5 14 18 / 80%);
 }
 
 .dashboard-bar {
@@ -290,10 +330,10 @@ main:has(> .login-panel) .page-header {
   inline-size: 2.75rem;
   block-size: 2.75rem;
   place-items: center;
-  border: 1px solid #71768e;
+  border: 1px solid var(--control-border);
   border-radius: 0.55rem;
-  background: #24283a;
-  color: #eef0ff;
+  background: var(--surface);
+  color: var(--text);
   list-style: none;
   cursor: pointer;
 }
@@ -303,8 +343,8 @@ main:has(> .login-panel) .page-header {
 }
 
 .account-menu[open] summary {
-  background: #c9d0ff;
-  color: #14151d;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .account-popover {
@@ -326,8 +366,8 @@ main:has(> .login-panel) .page-header {
 }
 
 .dashboard-menu button[aria-pressed="false"] {
-  background: #24283a;
-  color: #eef0ff;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .match-panel[hidden] {
@@ -350,9 +390,9 @@ main:has(> .login-panel) .page-header {
 .statistics-heading select {
   min-block-size: 2.75rem;
   padding: 0.5rem;
-  border: 1px solid #71768e;
+  border: 1px solid var(--control-border);
   border-radius: 0.55rem;
-  background: #121520;
+  background: var(--field);
   color: inherit;
   font: inherit;
 }
@@ -386,12 +426,21 @@ main:has(> .login-panel) .page-header {
 }
 
 .player-list button[aria-pressed="true"] {
-  background: #c9d0ff;
-  color: #14151d;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .player-history h2 {
   overflow-wrap: anywhere;
+}
+
+.player-view-menu {
+  margin-block-end: 1rem;
+}
+
+.player-history .statistics-panel {
+  padding: 0;
+  border: 0;
 }
 
 .admin-history li {
@@ -402,7 +451,8 @@ main:has(> .login-panel) .page-header {
   margin-block-start: 1rem;
 }
 
-.developer-panel {
+.developer-panel,
+.developer-forms {
   display: grid;
   align-items: start;
   gap: 1rem;
@@ -419,10 +469,10 @@ main:has(> .login-panel) .page-header {
   inline-size: 100%;
   min-inline-size: 0;
   min-block-size: 2.75rem;
-  border: 1px solid #71768e;
+  border: 1px solid var(--control-border);
   border-radius: 0.55rem;
   padding: 0.5rem 0.8rem;
-  background: #121520;
+  background: var(--field);
   color: inherit;
   font: inherit;
 }
@@ -443,9 +493,9 @@ main:has(> .login-panel) .page-header {
 .matrix-scroll {
   max-block-size: min(64vh, 42rem);
   overflow: auto;
-  border: 1px solid #383c50;
+  border: 1px solid var(--border);
   border-radius: 0.55rem;
-  background: #151720;
+  background: var(--field);
 }
 
 .match-matrix {
@@ -456,7 +506,7 @@ main:has(> .login-panel) .page-header {
 
 .matrix-key {
   margin: 0 0 0.5rem;
-  color: #c1c3d1;
+  color: var(--muted);
   font-size: 0.875rem;
 }
 
@@ -464,8 +514,8 @@ main:has(> .login-panel) .page-header {
 .match-matrix td {
   min-inline-size: 5rem;
   padding: 0.4rem 0.5rem;
-  border-block-end: 1px solid #383c50;
-  border-inline-end: 1px solid #383c50;
+  border-block-end: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   vertical-align: middle;
   overflow-wrap: anywhere;
 }
@@ -474,7 +524,7 @@ main:has(> .login-panel) .page-header {
   position: sticky;
   inset-block-start: 0;
   z-index: 2;
-  background: #24283a;
+  background: var(--surface);
 }
 
 .match-matrix tr > :first-child {
@@ -483,13 +533,13 @@ main:has(> .login-panel) .page-header {
   z-index: 1;
   inline-size: clamp(7.25rem, 32vw, 11rem);
   min-inline-size: clamp(7.25rem, 32vw, 11rem);
-  background: #191c29;
+  background: var(--panel);
   text-align: start;
 }
 
 .match-matrix thead tr > :first-child {
   z-index: 3;
-  background: #24283a;
+  background: var(--surface);
 }
 
 .match-matrix td {
@@ -518,7 +568,7 @@ main:has(> .login-panel) .page-header {
   place-items: center;
   overflow: hidden;
   border-radius: 0.25rem;
-  background: #383c50;
+  background: var(--border);
 }
 
 .matrix-portrait img {
@@ -537,7 +587,7 @@ main:has(> .login-panel) .page-header {
 
 .matrix-legend small,
 .matrix-empty {
-  color: #aeb3c9;
+  color: var(--muted);
 }
 
 .matrix-record[data-tone="positive"] {

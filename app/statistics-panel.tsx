@@ -79,13 +79,17 @@ function RecordCell({ record }: { record?: MatchRecord }) {
   );
 }
 
-export function StatisticsPanel({ client, userId, hidden, revision, showLegend, showDeckType }: {
+export function StatisticsPanel({
+  client, userId, hidden, revision, showLegend, showDeckType,
+  emptyMessage = "Registra una partida para ver tus enfrentamientos.",
+}: {
   client: SupabaseClient;
   userId: string;
   hidden: boolean;
   revision: number;
   showLegend: (name: string) => string;
   showDeckType: (deck: Deck) => string;
+  emptyMessage?: string;
 }) {
   const [matches, setMatches] = useState<StatisticsMatch[] | null>(null);
   const [filter, setFilter] = useState<DieFilter>("all");
@@ -185,7 +189,7 @@ export function StatisticsPanel({ client, userId, hidden, revision, showLegend, 
       </div>
       {error ? (
         <>
-          <p role="alert">No se pudieron cargar tus estadísticas.</p>
+          <p role="alert">No se pudieron cargar las estadísticas.</p>
           <button type="button" onClick={() => {
             setError(false);
             setAttempt((current) => current + 1);
@@ -194,7 +198,7 @@ export function StatisticsPanel({ client, userId, hidden, revision, showLegend, 
       ) : !matches ? (
         <p role="status">Cargando estadísticas…</p>
       ) : matches.length === 0 ? (
-        <p>Registra una partida para ver tus enfrentamientos.</p>
+        <p>{emptyMessage}</p>
       ) : (
         <>
           <p className="matrix-key" id="matrix-key">Porcentaje de victorias y victorias / partidas</p>

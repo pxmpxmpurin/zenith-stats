@@ -207,20 +207,42 @@ export function DeveloperPanel({ client, isOwner, onLegendsAdded, onUsernameChan
 
   return (
     <div className="developer-panel">
-      <section className="panel" aria-labelledby="catalog-tools-title">
-        <h2 id="catalog-tools-title">Catálogo de leyendas</h2>
-        <form onSubmit={addLegends}>
-          <label>
-            Nuevas leyendas
-            <textarea value={legendText} onChange={(event) => setLegendText(event.target.value)}
-              aria-describedby="legend-import-format" rows={5} maxLength={21000} required />
-            <small id="legend-import-format">Una por línea, con el formato Campeón | Título de la leyenda.</small>
-          </label>
-          <button type="submit" disabled={legendBusy}>{legendBusy ? "Añadiendo…" : "Añadir leyendas"}</button>
-        </form>
-        {legendError && <p role="alert">{legendError}</p>}
-        {legendNotice && <p role="status">{legendNotice}</p>}
-      </section>
+      <div className="developer-forms">
+        <section className="panel" aria-labelledby="catalog-tools-title">
+          <h2 id="catalog-tools-title">Catálogo de leyendas</h2>
+          <form onSubmit={addLegends}>
+            <label>
+              Nuevas leyendas
+              <textarea value={legendText} onChange={(event) => setLegendText(event.target.value)}
+                aria-describedby="legend-import-format" rows={5} maxLength={21000} required />
+              <small id="legend-import-format">Una por línea, con el formato Campeón | Título de la leyenda.</small>
+            </label>
+            <button type="submit" disabled={legendBusy}>{legendBusy ? "Añadiendo…" : "Añadir leyendas"}</button>
+          </form>
+          {legendError && <p role="alert">{legendError}</p>}
+          {legendNotice && <p role="status">{legendNotice}</p>}
+        </section>
+        <section className="panel" aria-labelledby="create-account-title">
+          <h2 id="create-account-title">Crear cuenta</h2>
+          <form method="post" onSubmit={createAccount}>
+            <label>
+              Nombre de usuario
+              <input name="username" autoComplete="off" autoCapitalize="none" spellCheck={false}
+                minLength={3} maxLength={30} required />
+              <small>De 3 a 30 caracteres. Usa letras sin tilde, números, puntos, guiones o guiones bajos.</small>
+            </label>
+            <label>
+              Contraseña
+              <input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={72} required />
+            </label>
+            <button type="submit" disabled={creatingAccount}>
+              {creatingAccount ? "Creando cuenta…" : "Crear cuenta"}
+            </button>
+          </form>
+          {createError && <p role="alert">{createError}</p>}
+          {createdUsername && <p role="status">Cuenta creada para <strong>{createdUsername}</strong>.</p>}
+        </section>
+      </div>
       <section className="panel" aria-labelledby="account-tools-title">
         <h2 id="account-tools-title">Usuarios y roles</h2>
         {directoryError && <p role="alert">No se pudo cargar la lista de usuarios.</p>}
@@ -274,26 +296,6 @@ export function DeveloperPanel({ client, isOwner, onLegendsAdded, onUsernameChan
         )}
         {playerError && <p role="alert">{playerError}</p>}
         {playerNotice && <p role="status">{playerNotice}</p>}
-      </section>
-      <section className="panel" aria-labelledby="create-account-title">
-        <h2 id="create-account-title">Crear cuenta</h2>
-        <form method="post" onSubmit={createAccount}>
-          <label>
-            Nombre de usuario
-            <input name="username" autoComplete="off" autoCapitalize="none" spellCheck={false}
-              minLength={3} maxLength={30} required />
-            <small>De 3 a 30 caracteres. Usa letras sin tilde, números, puntos, guiones o guiones bajos.</small>
-          </label>
-          <label>
-            Contraseña
-            <input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={72} required />
-          </label>
-          <button type="submit" disabled={creatingAccount}>
-            {creatingAccount ? "Creando cuenta…" : "Crear cuenta"}
-          </button>
-        </form>
-        {createError && <p role="alert">{createError}</p>}
-        {createdUsername && <p role="status">Cuenta creada para <strong>{createdUsername}</strong>.</p>}
       </section>
     </div>
   );

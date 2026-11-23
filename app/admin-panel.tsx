@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
+import { StatisticsPanel } from "./statistics-panel";
 
 type Player = { player_id: string; username: string };
 type DirectoryRow = { player_id: string; username?: string | null; email?: string | null };
@@ -115,7 +116,7 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
       <section className="panel player-history" aria-labelledby="player-history-title">
         <h2 id="player-history-title">{selectedPlayer?.username ?? "Historial de partidas"}</h2>
         {selectedPlayer ? (
-          <PlayerHistory key={playerId} client={client} playerId={playerId}
+          <PlayerDetails key={playerId} client={client} playerId={playerId}
             showLegend={showLegend} showDeckType={showDeckType} />
         ) : <p>Elige un jugador para consultar sus partidas.</p>}
       </section>
@@ -123,12 +124,49 @@ export function AdminPanel({ client, showLegend, showDeckType }: {
   );
 }
 
-function PlayerHistory({ client, playerId, showLegend, showDeckType }: {
+type PlayerDetailsProps = {
   client: SupabaseClient;
   playerId: string;
   showLegend: (name: string) => string;
   showDeckType: (deck: PlayerMatch["decks"]) => string;
-}) {
+};
+
+function PlayerDetails({ client, playerId, showLegend, showDeckType }: PlayerDetailsProps) {
+  const [view, setView] = useState<"history" | "matrix">("history");
+  const [matrixOpened, setMatrixOpened] = useState(false);
+
+  return (
+    <>
+      <nav className="dashboard-menu player-view-menu" aria-label="Datos del jugador">
+        <button type="button" aria-pressed={view === "history"} onClick={() => setView("history")}>
+          Historial
+        </button>
+        <button type="button" aria-pressed={view === "matrix"} onClick={() => {
+          setMatrixOpened(true);
+          setView("matrix");
+        }}>
+          Matriz
+        </button>
+      </nav>
+      <div hidden={view !== "history"}>
+        <PlayerHistory client={client} playerId={playerId} showLegend={showLegend} showDeckType={showDeckType} />
+      </div>
+      {matrixOpened && (
+        <StatisticsPanel
+          client={client}
+          userId={playerId}
+          hidden={view !== "matrix"}
+          revision={0}
+          emptyMessage="Este jugador todavía no tiene partidas registradas."
+          showLegend={showLegend}
+          showDeckType={showDeckType}
+        />
+      )}
+    </>
+  );
+}
+
+function PlayerHistory({ client, playerId, showLegend, showDeckType }: PlayerDetailsProps) {
   const [page, setPage] = useState(0);
   const [history, setHistory] = useState<History | null>(null);
   const [error, setError] = useState(false);
